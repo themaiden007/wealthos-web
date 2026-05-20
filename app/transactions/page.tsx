@@ -49,8 +49,6 @@ type Transaction = {
   updated_at: string;
 };
 
-const OLD_LOCAL_TRANSACTIONS_KEY = "wealthos_transactions_v1";
-
 const CATEGORY_OPTIONS = [
   "Salary",
   "Bonus",
@@ -94,7 +92,7 @@ export default function TransactionsPage() {
   const [importing, setImporting] = useState(false);
   const [updatingId, setUpdatingId] = useState("");
   const [deletingId, setDeletingId] = useState("");
-  const [clearing, setClearing] = useState(false);
+  const [showCsvImport, setShowCsvImport] = useState(false);
 
   const [accountId, setAccountId] = useState("");
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
@@ -346,9 +344,7 @@ export default function TransactionsPage() {
 
     setTransactions((current) =>
       current.map((transaction) =>
-        transaction.id === transactionId
-          ? (data as Transaction)
-          : transaction
+        transaction.id === transactionId ? (data as Transaction) : transaction
       )
     );
 
@@ -407,111 +403,12 @@ export default function TransactionsPage() {
     setCsvMessage(
       `Imported ${data?.length || 0} transaction${
         data?.length === 1 ? "" : "s"
-      }. ${result.errors.length > 0 ? `${result.errors.length} row(s) skipped.` : ""}`
+      }. ${
+        result.errors.length > 0 ? `${result.errors.length} row(s) skipped.` : ""
+      }`
     );
 
     setCsvText("");
-  }
-
-  async function importOldLocalTransactions() {
-    if (!userId) {
-      alert("You must be logged in.");
-      return;
-    }
-
-    if (accounts.length === 0) {
-      alert("Add or import accounts first before importing old transactions.");
-      return;
-    }
-
-    const saved = window.localStorage.getItem(OLD_LOCAL_TRANSACTIONS_KEY);
-
-    if (!saved) {
-      alert("No old local transactions found.");
-      return;
-    }
-
-    let parsed: any[];
-
-    try {
-      parsed = JSON.parse(saved);
-    } catch {
-      alert("Old local transactions data is not valid JSON.");
-      return;
-    }
-
-    if (!Array.isArray(parsed) || parsed.length === 0) {
-      alert("No old local transactions found.");
-      return;
-    }
-
-    const confirmed = confirm(
-      `Import ${parsed.length} old local transaction(s) into Supabase?\n\nOnly click this once to avoid duplicates.`
-    );
-
-    if (!confirmed) return;
-
-    const fallbackAccountId = accounts[0].id;
-
-    const existingKeys = new Set(
-      transactions.map(
-        (transaction) =>
-          `${transaction.date}-${transaction.name}-${Number(
-            transaction.amount
-          )}-${transaction.transaction_type}-${transaction.category}`
-      )
-    );
-
-    const payload = parsed
-      .filter((transaction) => {
-        const key = `${transaction.date}-${transaction.name}-${Number(
-          transaction.amount || 0
-        )}-${transaction.transactionType}-${transaction.category}`;
-
-        return !existingKeys.has(key);
-      })
-      .map((transaction) => ({
-        user_id: userId,
-        account_id: fallbackAccountId,
-        date: transaction.date || new Date().toISOString().slice(0, 10),
-        name: transaction.name || "Imported Transaction",
-        merchant_name:
-          transaction.merchantName || transaction.name || "Imported Transaction",
-        amount: Math.abs(Number(transaction.amount || 0)),
-        transaction_type: normalizeTransactionType(transaction.transactionType),
-        category: transaction.category || "Other",
-        notes: transaction.notes || "Imported from old localStorage",
-        source: "local_import",
-        updated_at: new Date().toISOString(),
-      }))
-      .filter((transaction) => transaction.amount > 0);
-
-    if (payload.length === 0) {
-      alert("No new transactions to import. They may already exist in Supabase.");
-      return;
-    }
-
-    setImporting(true);
-
-    const { data, error } = await supabase
-      .from("transactions")
-      .insert(payload)
-      .select();
-
-    setImporting(false);
-
-    if (error) {
-      console.error("Failed to import old local transactions:", error);
-      alert(error.message);
-      return;
-    }
-
-    setTransactions((current) => [
-      ...((data || []) as Transaction[]),
-      ...current,
-    ]);
-
-    alert(`Imported ${data?.length || 0} old local transaction(s) into Supabase.`);
   }
 
   async function deleteTransaction(transaction: Transaction) {
@@ -540,36 +437,6 @@ export default function TransactionsPage() {
     setTransactions((current) =>
       current.filter((item) => item.id !== transaction.id)
     );
-  }
-
-  async function clearAllTransactions() {
-    const confirmed = confirm(
-      "Delete ALL Supabase transactions for this user?\n\nThis cannot be undone. Only do this if you are resetting test data."
-    );
-
-    if (!confirmed) return;
-
-    const secondConfirm = confirm(
-      "Final confirmation: permanently delete every transaction?"
-    );
-
-    if (!secondConfirm) return;
-
-    setClearing(true);
-
-    const { error } = await supabase
-      .from("transactions")
-      .delete()
-      .eq("user_id", userId);
-
-    setClearing(false);
-
-    if (error) {
-      alert(error.message);
-      return;
-    }
-
-    setTransactions([]);
   }
 
   function getAccountName(id: string) {
@@ -628,12 +495,24 @@ export default function TransactionsPage() {
             />
           </div>
 
-          <div className="mt-8 grid gap-6 xl:grid-cols-[380px_420px_1fr]">
+          <div className="mt-8 grid gap-6 xl:grid-cols-[420px_1fr]">
             <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-              <h2 className="text-lg font-medium">Add Transaction</h2>
-              <p className="mt-1 text-sm text-slate-400">
-                Manual transactions are stored in Supabase.
-              </p>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <h2 className="text-lg font-medium">Add Transaction</h2>
+                  <p className="mt-1 text-sm text-slate-400">
+                    Add transactions manually or import CSV data.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowCsvImport((current) => !current)}
+                  className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800"
+                >
+                  {showCsvImport ? "Hide CSV Import" : "Show CSV Import"}
+                </button>
+              </div>
 
               {accounts.length === 0 ? (
                 <div className="mt-5 rounded-xl border border-amber-800 bg-amber-950/30 p-4 text-sm text-amber-200">
@@ -648,168 +527,161 @@ export default function TransactionsPage() {
                   </div>
                 </div>
               ) : (
-                <form onSubmit={addTransaction} className="mt-5 space-y-4">
-                  <AccountSelect
-                    accounts={accounts}
-                    accountId={accountId}
-                    setAccountId={setAccountId}
-                  />
-
-                  <div>
-                    <label className="text-sm text-slate-300">Date</label>
-                    <input
-                      value={date}
-                      onChange={(event) => setDate(event.target.value)}
-                      type="date"
-                      className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                <div className="mt-5 space-y-6">
+                  <form onSubmit={addTransaction} className="space-y-4">
+                    <AccountSelect
+                      accounts={accounts}
+                      accountId={accountId}
+                      setAccountId={setAccountId}
                     />
-                  </div>
 
-                  <div>
-                    <label className="text-sm text-slate-300">
-                      Transaction Name
-                    </label>
-                    <input
-                      value={name}
-                      onChange={(event) => setName(event.target.value)}
-                      placeholder="Example: Walmart, Salary, Rent"
-                      className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
-                    />
-                  </div>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div>
+                        <label className="text-sm text-slate-300">Date</label>
+                        <input
+                          value={date}
+                          onChange={(event) => setDate(event.target.value)}
+                          type="date"
+                          className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                        />
+                      </div>
 
-                  <div>
-                    <label className="text-sm text-slate-300">Merchant</label>
-                    <input
-                      value={merchantName}
-                      onChange={(event) => setMerchantName(event.target.value)}
-                      placeholder="Optional"
-                      className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
-                    />
-                  </div>
+                      <div>
+                        <label className="text-sm text-slate-300">Amount</label>
+                        <input
+                          value={amount}
+                          onChange={(event) => setAmount(event.target.value)}
+                          placeholder="Example: 45.99"
+                          type="number"
+                          step="0.01"
+                          className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                        />
+                      </div>
+                    </div>
 
-                  <div>
-                    <label className="text-sm text-slate-300">Amount</label>
-                    <input
-                      value={amount}
-                      onChange={(event) => setAmount(event.target.value)}
-                      placeholder="Example: 45.99"
-                      type="number"
-                      step="0.01"
-                      className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
-                    />
-                  </div>
+                    <div>
+                      <label className="text-sm text-slate-300">
+                        Transaction Name
+                      </label>
+                      <input
+                        value={name}
+                        onChange={(event) => setName(event.target.value)}
+                        placeholder="Example: Walmart, Salary, Rent"
+                        className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                      />
+                    </div>
 
-                  <TransactionTypeSelect
-                    transactionType={transactionType}
-                    setTransactionType={setTransactionType}
-                  />
+                    <div>
+                      <label className="text-sm text-slate-300">Merchant</label>
+                      <input
+                        value={merchantName}
+                        onChange={(event) =>
+                          setMerchantName(event.target.value)
+                        }
+                        placeholder="Optional"
+                        className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                      />
+                    </div>
 
-                  <CategorySelect category={category} setCategory={setCategory} />
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <TransactionTypeSelect
+                        transactionType={transactionType}
+                        setTransactionType={setTransactionType}
+                      />
 
-                  <div>
-                    <label className="text-sm text-slate-300">Notes</label>
-                    <textarea
-                      value={notes}
-                      onChange={(event) => setNotes(event.target.value)}
-                      placeholder="Optional notes"
-                      rows={3}
-                      className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
-                    />
-                  </div>
+                      <CategorySelect
+                        category={category}
+                        setCategory={setCategory}
+                      />
+                    </div>
 
-                  <button
-                    type="submit"
-                    disabled={saving}
-                    className="w-full rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium hover:bg-blue-500 disabled:opacity-60"
-                  >
-                    {saving ? "Saving..." : "Add Transaction"}
-                  </button>
-                </form>
-              )}
-
-              <div className="mt-5 rounded-xl border border-slate-800 bg-slate-950 p-4">
-                <p className="text-sm font-medium text-slate-200">
-                  Migration utility
-                </p>
-                <p className="mt-1 text-xs text-slate-500">
-                  Use only if you still need to import old browser-stored
-                  transactions.
-                </p>
-
-                <button
-                  type="button"
-                  onClick={importOldLocalTransactions}
-                  disabled={importing || accounts.length === 0}
-                  className="mt-3 w-full rounded-xl border border-blue-900 px-4 py-2 text-sm text-blue-300 hover:bg-blue-950 disabled:opacity-60"
-                >
-                  {importing ? "Importing..." : "Import Old Local Transactions"}
-                </button>
-              </div>
-            </section>
-
-            <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-              <h2 className="text-lg font-medium">CSV Import</h2>
-              <p className="mt-1 text-sm text-slate-400">
-                Paste transactions in CSV format and bulk import to Supabase.
-              </p>
-
-              {accounts.length > 0 ? (
-                <div className="mt-5 space-y-4">
-                  <AccountSelect
-                    accounts={accounts}
-                    accountId={accountId}
-                    setAccountId={setAccountId}
-                  />
-
-                  <div>
-                    <label className="text-sm text-slate-300">CSV Data</label>
-                    <textarea
-                      value={csvText}
-                      onChange={(event) => setCsvText(event.target.value)}
-                      placeholder={SAMPLE_CSV}
-                      rows={11}
-                      className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 font-mono text-xs outline-none focus:border-blue-500"
-                    />
-                    <p className="mt-2 text-xs text-slate-500">
-                      Required columns: date, name, amount. Optional: merchant,
-                      type, category.
-                    </p>
-                  </div>
-
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setCsvText(SAMPLE_CSV)}
-                      className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800"
-                    >
-                      Use Sample CSV
-                    </button>
+                    <div>
+                      <label className="text-sm text-slate-300">Notes</label>
+                      <textarea
+                        value={notes}
+                        onChange={(event) => setNotes(event.target.value)}
+                        placeholder="Optional notes"
+                        rows={3}
+                        className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                      />
+                    </div>
 
                     <button
-                      type="button"
-                      onClick={importCsv}
-                      disabled={importing}
-                      className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium hover:bg-emerald-500 disabled:opacity-60"
+                      type="submit"
+                      disabled={saving}
+                      className="w-full rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium hover:bg-blue-500 disabled:opacity-60"
                     >
-                      {importing ? "Importing..." : "Import CSV"}
+                      {saving ? "Saving..." : "Add Transaction"}
                     </button>
-                  </div>
+                  </form>
 
-                  {csvMessage && (
-                    <div className="rounded-xl border border-slate-700 bg-slate-950 p-3 text-sm text-slate-300">
-                      {csvMessage}
+                  {showCsvImport && (
+                    <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                      <h3 className="text-sm font-medium text-slate-200">
+                        CSV Import
+                      </h3>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Required columns: date, name, amount. Optional:
+                        merchant, type, category.
+                      </p>
+
+                      <div className="mt-4">
+                        <label className="text-sm text-slate-300">
+                          Import Account
+                        </label>
+                        <select
+                          value={accountId}
+                          onChange={(event) => setAccountId(event.target.value)}
+                          className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                        >
+                          {accounts.map((account) => (
+                            <option key={account.id} value={account.id}>
+                              {account.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <textarea
+                        value={csvText}
+                        onChange={(event) => setCsvText(event.target.value)}
+                        placeholder={SAMPLE_CSV}
+                        rows={8}
+                        className="mt-4 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 font-mono text-xs outline-none focus:border-blue-500"
+                      />
+
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setCsvText(SAMPLE_CSV)}
+                          className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800"
+                        >
+                          Use Sample CSV
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={importCsv}
+                          disabled={importing}
+                          className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium hover:bg-emerald-500 disabled:opacity-60"
+                        >
+                          {importing ? "Importing..." : "Import CSV"}
+                        </button>
+                      </div>
+
+                      {csvMessage && (
+                        <div className="mt-3 rounded-xl border border-slate-700 bg-slate-900 p-3 text-sm text-slate-300">
+                          {csvMessage}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
-              ) : (
-                <div className="mt-5 rounded-xl border border-amber-800 bg-amber-950/30 p-4 text-sm text-amber-200">
-                  Add an active account first before importing CSV transactions.
-                </div>
               )}
             </section>
 
             <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-              <div className="mb-4 flex items-center justify-between gap-3">
+              <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
                 <div>
                   <h2 className="text-lg font-medium">Transaction List</h2>
                   <p className="text-sm text-slate-400">
@@ -817,146 +689,204 @@ export default function TransactionsPage() {
                     {transactions.length === 1 ? "" : "s"} added
                   </p>
                 </div>
-
-                {transactions.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={clearAllTransactions}
-                    disabled={clearing}
-                    className="rounded-lg border border-red-900 px-3 py-1 text-xs text-red-300 hover:bg-red-950 disabled:opacity-60"
-                  >
-                    {clearing ? "Clearing..." : "Clear All"}
-                  </button>
-                )}
               </div>
 
-              <div className="overflow-x-auto rounded-xl border border-slate-800">
-                <table className="w-full min-w-[980px] text-left text-sm">
-                  <thead className="bg-slate-950 text-slate-400">
-                    <tr>
-                      <th className="px-4 py-3">Transaction</th>
-                      <th className="px-4 py-3">Account</th>
-                      <th className="px-4 py-3">Category</th>
-                      <th className="px-4 py-3 text-right">Amount</th>
-                      <th className="px-4 py-3 text-right">Action</th>
-                    </tr>
-                  </thead>
+              {transactions.length === 0 ? (
+                <div className="rounded-2xl border border-slate-800 bg-slate-950 p-8 text-center text-slate-500">
+                  No transactions yet. Add one manually or import a CSV.
+                </div>
+              ) : (
+                <div className="grid gap-4 xl:grid-cols-2">
+                  {transactions.map((transaction) => {
+                    const isEditing = editingId === transaction.id;
+                    const isBusy =
+                      updatingId === transaction.id ||
+                      deletingId === transaction.id;
 
-                  <tbody>
-                    {transactions.map((transaction) => {
-                      const isEditing = editingId === transaction.id;
-                      const isBusy =
-                        updatingId === transaction.id ||
-                        deletingId === transaction.id;
-
-                      return (
-                        <tr
-                          key={transaction.id}
-                          className="border-t border-slate-800 text-slate-200"
-                        >
-                          <td className="px-4 py-3 align-top">
-                            {isEditing ? (
-                              <div className="space-y-2">
+                    return (
+                      <div
+                        key={transaction.id}
+                        className="min-w-0 rounded-2xl border border-slate-800 bg-slate-950 p-4"
+                      >
+                        {isEditing ? (
+                          <div className="space-y-3">
+                            <div className="grid gap-3 sm:grid-cols-2">
+                              <div>
+                                <label className="text-xs text-slate-400">
+                                  Date
+                                </label>
                                 <input
                                   value={editDate}
                                   onChange={(event) =>
                                     setEditDate(event.target.value)
                                   }
                                   type="date"
-                                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
-                                />
-                                <input
-                                  value={editName}
-                                  onChange={(event) =>
-                                    setEditName(event.target.value)
-                                  }
-                                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
-                                />
-                                <input
-                                  value={editMerchantName}
-                                  onChange={(event) =>
-                                    setEditMerchantName(event.target.value)
-                                  }
-                                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-blue-500"
                                 />
                               </div>
-                            ) : (
+
                               <div>
-                                <p className="font-medium">
+                                <label className="text-xs text-slate-400">
+                                  Account
+                                </label>
+                                <select
+                                  value={editAccountId}
+                                  onChange={(event) =>
+                                    setEditAccountId(event.target.value)
+                                  }
+                                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                                >
+                                  {accounts.map((account) => (
+                                    <option
+                                      key={account.id}
+                                      value={account.id}
+                                    >
+                                      {account.name}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="text-xs text-slate-400">
+                                Transaction Name
+                              </label>
+                              <input
+                                value={editName}
+                                onChange={(event) =>
+                                  setEditName(event.target.value)
+                                }
+                                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="text-xs text-slate-400">
+                                Merchant
+                              </label>
+                              <input
+                                value={editMerchantName}
+                                onChange={(event) =>
+                                  setEditMerchantName(event.target.value)
+                                }
+                                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                              />
+                            </div>
+
+                            <div className="grid gap-3 sm:grid-cols-3">
+                              <div>
+                                <label className="text-xs text-slate-400">
+                                  Amount
+                                </label>
+                                <input
+                                  value={editAmount}
+                                  onChange={(event) =>
+                                    setEditAmount(event.target.value)
+                                  }
+                                  type="number"
+                                  step="0.01"
+                                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="text-xs text-slate-400">
+                                  Type
+                                </label>
+                                <select
+                                  value={editTransactionType}
+                                  onChange={(event) =>
+                                    setEditTransactionType(
+                                      event.target.value as TransactionType
+                                    )
+                                  }
+                                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                                >
+                                  <option value="expense">Expense</option>
+                                  <option value="income">Income</option>
+                                  <option value="transfer">Transfer</option>
+                                </select>
+                              </div>
+
+                              <div>
+                                <label className="text-xs text-slate-400">
+                                  Category
+                                </label>
+                                <select
+                                  value={editCategory}
+                                  onChange={(event) =>
+                                    setEditCategory(event.target.value)
+                                  }
+                                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                                >
+                                  {CATEGORY_OPTIONS.map((option) => (
+                                    <option key={option} value={option}>
+                                      {option}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="text-xs text-slate-400">
+                                Notes
+                              </label>
+                              <textarea
+                                value={editNotes}
+                                onChange={(event) =>
+                                  setEditNotes(event.target.value)
+                                }
+                                rows={2}
+                                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                              />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2 pt-2">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  saveTransactionEdit(transaction.id)
+                                }
+                                disabled={isBusy}
+                                className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white hover:bg-blue-500 disabled:opacity-60"
+                              >
+                                {updatingId === transaction.id
+                                  ? "Saving..."
+                                  : "Save"}
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={cancelEditing}
+                                disabled={isBusy}
+                                className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800 disabled:opacity-60"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                              <div className="min-w-0">
+                                <p className="break-words font-medium">
                                   {transaction.name}
                                 </p>
-                                <p className="text-xs text-slate-500">
+                                <p className="mt-1 break-words text-xs text-slate-500">
                                   {transaction.date} •{" "}
-                                  {transaction.transaction_type}
+                                  {getAccountName(transaction.account_id)}
                                 </p>
                               </div>
-                            )}
-                          </td>
 
-                          <td className="px-4 py-3 align-top text-slate-300">
-                            {isEditing ? (
-                              <select
-                                value={editAccountId}
-                                onChange={(event) =>
-                                  setEditAccountId(event.target.value)
-                                }
-                                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
-                              >
-                                {accounts.map((account) => (
-                                  <option key={account.id} value={account.id}>
-                                    {account.name}
-                                  </option>
-                                ))}
-                              </select>
-                            ) : (
-                              getAccountName(transaction.account_id)
-                            )}
-                          </td>
-
-                          <td className="px-4 py-3 align-top text-slate-300">
-                            {isEditing ? (
-                              <div className="space-y-2">
-                                <TransactionTypeSelect
-                                  transactionType={editTransactionType}
-                                  setTransactionType={setEditTransactionType}
-                                />
-                                <CategorySelect
-                                  category={editCategory}
-                                  setCategory={setEditCategory}
-                                />
-                                <textarea
-                                  value={editNotes}
-                                  onChange={(event) =>
-                                    setEditNotes(event.target.value)
-                                  }
-                                  rows={2}
-                                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
-                                />
-                              </div>
-                            ) : (
-                              transaction.category
-                            )}
-                          </td>
-
-                          <td className="px-4 py-3 text-right align-top font-medium">
-                            {isEditing ? (
-                              <input
-                                value={editAmount}
-                                onChange={(event) =>
-                                  setEditAmount(event.target.value)
-                                }
-                                type="number"
-                                step="0.01"
-                                className="w-32 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-right text-sm outline-none focus:border-blue-500"
-                              />
-                            ) : (
-                              <span
+                              <p
                                 className={
                                   transaction.transaction_type === "income"
-                                    ? "text-emerald-300"
+                                    ? "shrink-0 text-left text-lg font-semibold text-emerald-300 sm:text-right"
                                     : transaction.transaction_type === "expense"
-                                    ? "text-red-300"
-                                    : "text-slate-300"
+                                    ? "shrink-0 text-left text-lg font-semibold text-red-300 sm:text-right"
+                                    : "shrink-0 text-left text-lg font-semibold text-slate-300 sm:text-right"
                                 }
                               >
                                 {transaction.transaction_type === "income"
@@ -965,79 +895,57 @@ export default function TransactionsPage() {
                                   ? "-"
                                   : ""}
                                 {formatCurrency(Number(transaction.amount))}
+                              </p>
+                            </div>
+
+                            <div className="mt-4 flex flex-wrap gap-2">
+                              <span className="rounded-full bg-slate-800 px-2 py-1 text-xs capitalize text-slate-300">
+                                {transaction.transaction_type}
                               </span>
+                              <span className="rounded-full bg-slate-800 px-2 py-1 text-xs text-slate-300">
+                                {transaction.category}
+                              </span>
+                              {transaction.merchant_name && (
+                                <span className="max-w-full break-words rounded-full bg-slate-800 px-2 py-1 text-xs text-slate-400">
+                                  {transaction.merchant_name}
+                                </span>
+                              )}
+                            </div>
+
+                            {transaction.notes && (
+                              <p className="mt-4 break-words rounded-xl border border-slate-800 bg-slate-900 p-3 text-sm text-slate-400">
+                                {transaction.notes}
+                              </p>
                             )}
-                          </td>
 
-                          <td className="px-4 py-3 text-right align-top">
-                            {isEditing ? (
-                              <div className="flex justify-end gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    saveTransactionEdit(transaction.id)
-                                  }
-                                  disabled={isBusy}
-                                  className="rounded-lg bg-blue-600 px-3 py-1 text-xs font-medium text-white hover:bg-blue-500 disabled:opacity-60"
-                                >
-                                  {updatingId === transaction.id
-                                    ? "Saving..."
-                                    : "Save"}
-                                </button>
+                            <div className="mt-5 grid grid-cols-2 gap-2">
+                              <button
+                                type="button"
+                                onClick={() => startEditing(transaction)}
+                                disabled={isBusy}
+                                className="rounded-lg border border-blue-900 px-3 py-2 text-xs text-blue-300 hover:bg-blue-950 disabled:opacity-60"
+                              >
+                                Edit
+                              </button>
 
-                                <button
-                                  type="button"
-                                  onClick={cancelEditing}
-                                  disabled={isBusy}
-                                  className="rounded-lg border border-slate-700 px-3 py-1 text-xs text-slate-300 hover:bg-slate-800 disabled:opacity-60"
-                                >
-                                  Cancel
-                                </button>
-                              </div>
-                            ) : (
-                              <div className="flex justify-end gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => startEditing(transaction)}
-                                  disabled={isBusy}
-                                  className="rounded-lg border border-blue-900 px-3 py-1 text-xs text-blue-300 hover:bg-blue-950 disabled:opacity-60"
-                                >
-                                  Edit
-                                </button>
-
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    deleteTransaction(transaction)
-                                  }
-                                  disabled={isBusy}
-                                  className="rounded-lg border border-red-900 px-3 py-1 text-xs text-red-300 hover:bg-red-950 disabled:opacity-60"
-                                >
-                                  {deletingId === transaction.id
-                                    ? "Deleting..."
-                                    : "Delete"}
-                                </button>
-                              </div>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-
-                    {transactions.length === 0 && (
-                      <tr>
-                        <td
-                          colSpan={5}
-                          className="px-4 py-10 text-center text-slate-500"
-                        >
-                          No Supabase transactions yet. Add manually, import
-                          CSV, or import old local transactions.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                              <button
+                                type="button"
+                                onClick={() => deleteTransaction(transaction)}
+                                disabled={isBusy}
+                                className="rounded-lg border border-red-900 px-3 py-2 text-xs text-red-300 hover:bg-red-950 disabled:opacity-60"
+                              >
+                                {deletingId === transaction.id
+                                  ? "Deleting..."
+                                  : "Delete"}
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </section>
           </div>
         </div>
