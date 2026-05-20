@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import AppNav from "@/components/AppNav";
+import { useToast } from "@/components/ToastProvider";
 
 type AccountType =
   | "checking"
@@ -97,6 +98,8 @@ const LIABILITY_TYPES: AccountType[] = [
 ];
 
 export default function HomePage() {
+  const { showToast } = useToast();
+
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [budgetItems, setBudgetItems] = useState<BudgetItem[]>([]);
@@ -151,22 +154,38 @@ export default function HomePage() {
         ]);
 
         if (accountsResponse.error) {
-          alert(accountsResponse.error.message);
+          showToast({
+            type: "error",
+            title: "Failed to load accounts",
+            message: accountsResponse.error.message,
+          });
           return;
         }
 
         if (transactionsResponse.error) {
-          alert(transactionsResponse.error.message);
+          showToast({
+            type: "error",
+            title: "Failed to load transactions",
+            message: transactionsResponse.error.message,
+          });
           return;
         }
 
         if (budgetResponse.error) {
-          alert(budgetResponse.error.message);
+          showToast({
+            type: "error",
+            title: "Failed to load budget",
+            message: budgetResponse.error.message,
+          });
           return;
         }
 
         if (goalsResponse.error) {
-          alert(goalsResponse.error.message);
+          showToast({
+            type: "error",
+            title: "Failed to load goals",
+            message: goalsResponse.error.message,
+          });
           return;
         }
 
@@ -182,7 +201,7 @@ export default function HomePage() {
     }
 
     loadDashboard();
-  }, []);
+  }, [showToast]);
 
   const currentMonth = new Date().toISOString().slice(0, 7);
 
