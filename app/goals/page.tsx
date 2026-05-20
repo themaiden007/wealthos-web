@@ -26,20 +26,6 @@ type Goal = {
   updated_at: string;
 };
 
-type LocalGoal = {
-  id: string;
-  name: string;
-  goalType: GoalType;
-  targetAmount: number;
-  currentAmount: number;
-  targetDate: string;
-  monthlyContribution: number;
-  notes: string;
-  createdAt: string;
-};
-
-const OLD_LOCAL_GOALS_KEY = "wealthos_goals_v1";
-
 const GOAL_TYPE_OPTIONS: { label: string; value: GoalType }[] = [
   { label: "Emergency Fund", value: "emergency_fund" },
   { label: "Debt Payoff", value: "debt_payoff" },
@@ -56,7 +42,6 @@ export default function GoalsPage() {
   const [hasLoaded, setHasLoaded] = useState(false);
 
   const [saving, setSaving] = useState(false);
-  const [importing, setImporting] = useState(false);
   const [updatingId, setUpdatingId] = useState("");
   const [deletingId, setDeletingId] = useState("");
 
@@ -294,90 +279,6 @@ export default function GoalsPage() {
     );
 
     cancelEditing();
-  }
-
-  async function importOldLocalGoals() {
-    if (!userId) {
-      alert("You must be logged in.");
-      return;
-    }
-
-    const saved = window.localStorage.getItem(OLD_LOCAL_GOALS_KEY);
-
-    if (!saved) {
-      alert("No old local goals found.");
-      return;
-    }
-
-    let parsed: LocalGoal[];
-
-    try {
-      parsed = JSON.parse(saved);
-    } catch {
-      alert("Old local goals data is not valid JSON.");
-      return;
-    }
-
-    if (!Array.isArray(parsed) || parsed.length === 0) {
-      alert("No old local goals found.");
-      return;
-    }
-
-    const confirmed = confirm(
-      `Import ${parsed.length} old local goal(s) into Supabase?\n\nOnly click this once to avoid duplicates.`
-    );
-
-    if (!confirmed) return;
-
-    const existingKeys = new Set(
-      goals.map(
-        (goal) =>
-          `${goal.name}-${goal.goal_type}-${Number(goal.target_amount)}-${Number(
-            goal.current_amount
-          )}`
-      )
-    );
-
-    const payload = parsed
-      .filter((goal) => {
-        const key = `${goal.name}-${goal.goalType}-${Number(
-          goal.targetAmount || 0
-        )}-${Number(goal.currentAmount || 0)}`;
-
-        return !existingKeys.has(key);
-      })
-      .map((goal) => ({
-        user_id: userId,
-        name: goal.name || "Imported Goal",
-        goal_type: goal.goalType || "savings",
-        target_amount: Number(goal.targetAmount || 0),
-        current_amount: Number(goal.currentAmount || 0),
-        target_date: goal.targetDate || null,
-        monthly_contribution: Number(goal.monthlyContribution || 0),
-        notes: goal.notes || "Imported from old localStorage",
-        updated_at: new Date().toISOString(),
-      }))
-      .filter((goal) => goal.target_amount > 0);
-
-    if (payload.length === 0) {
-      alert("No new goals to import. They may already exist in Supabase.");
-      return;
-    }
-
-    setImporting(true);
-
-    const { data, error } = await supabase.from("goals").insert(payload).select();
-
-    setImporting(false);
-
-    if (error) {
-      alert(error.message);
-      return;
-    }
-
-    setGoals((current) => [...((data || []) as Goal[]), ...current]);
-
-    alert(`Imported ${data?.length || 0} old local goal(s) into Supabase.`);
   }
 
   async function deleteGoal(goal: Goal) {
@@ -638,347 +539,354 @@ export default function GoalsPage() {
                   {saving ? "Saving..." : "Add Goal"}
                 </button>
               </form>
-
-              <div className="mt-5 rounded-xl border border-slate-800 bg-slate-950 p-4">
-                <p className="text-sm font-medium text-slate-200">
-                  Migration utility
-                </p>
-                <p className="mt-1 text-xs text-slate-500">
-                  Use only if you still need to import old browser-stored goals.
-                </p>
-
-                <button
-                  type="button"
-                  onClick={importOldLocalGoals}
-                  disabled={importing}
-                  className="mt-3 w-full rounded-xl border border-blue-900 px-4 py-2 text-sm text-blue-300 hover:bg-blue-950 disabled:opacity-60"
-                >
-                  {importing ? "Importing..." : "Import Old Local Goals"}
-                </button>
-              </div>
             </section>
 
             <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-              <div className="mb-4">
-                <h2 className="text-lg font-medium">Goal List</h2>
-                <p className="text-sm text-slate-400">
-                  {goals.length} goal{goals.length === 1 ? "" : "s"} added
-                </p>
+              <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <h2 className="text-lg font-medium">Goal List</h2>
+                  <p className="text-sm text-slate-400">
+                    {goals.length} goal{goals.length === 1 ? "" : "s"} added
+                  </p>
+                </div>
               </div>
 
-              <div className="space-y-4">
-                {goals.map((goal) => {
-                  const isEditing = editingId === goal.id;
-                  const isBusy =
-                    updatingId === goal.id || deletingId === goal.id;
+              {goals.length === 0 ? (
+                <div className="rounded-2xl border border-slate-800 bg-slate-950 p-10 text-center text-slate-500">
+                  No goals yet. Add your first financial goal.
+                </div>
+              ) : (
+                <div className="grid gap-4 xl:grid-cols-2 2xl:grid-cols-3">
+                  {goals.map((goal) => {
+                    const isEditing = editingId === goal.id;
+                    const isBusy =
+                      updatingId === goal.id || deletingId === goal.id;
 
-                  const progress =
-                    Number(goal.target_amount) > 0
-                      ? Math.min(
-                          (Number(goal.current_amount) /
-                            Number(goal.target_amount)) *
-                            100,
-                          100
-                        )
-                      : 0;
+                    const progress =
+                      Number(goal.target_amount) > 0
+                        ? Math.min(
+                            (Number(goal.current_amount) /
+                              Number(goal.target_amount)) *
+                              100,
+                            100
+                          )
+                        : 0;
 
-                  const remaining = Math.max(
-                    Number(goal.target_amount) - Number(goal.current_amount),
-                    0
-                  );
+                    const remaining = Math.max(
+                      Number(goal.target_amount) - Number(goal.current_amount),
+                      0
+                    );
 
-                  const monthsLeft = calculateMonthsLeft(
-                    isEditing ? editTargetDate : goal.target_date || ""
-                  );
+                    const monthsLeft = calculateMonthsLeft(
+                      isEditing ? editTargetDate : goal.target_date || ""
+                    );
 
-                  const requiredMonthly =
-                    monthsLeft > 0 ? remaining / monthsLeft : remaining;
+                    const requiredMonthly =
+                      monthsLeft > 0 ? remaining / monthsLeft : remaining;
 
-                  const isComplete =
-                    Number(goal.current_amount) >= Number(goal.target_amount);
+                    const isComplete =
+                      Number(goal.current_amount) >= Number(goal.target_amount);
 
-                  return (
-                    <div
-                      key={goal.id}
-                      className="rounded-2xl border border-slate-800 bg-slate-950 p-5"
-                    >
-                      {isEditing ? (
-                        <div className="grid gap-4 lg:grid-cols-2">
-                          <div>
-                            <label className="text-sm text-slate-300">
-                              Goal Name
-                            </label>
-                            <input
-                              value={editName}
-                              onChange={(event) =>
-                                setEditName(event.target.value)
-                              }
-                              className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-blue-500"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="text-sm text-slate-300">
-                              Goal Type
-                            </label>
-                            <select
-                              value={editGoalType}
-                              onChange={(event) =>
-                                setEditGoalType(
-                                  event.target.value as GoalType
-                                )
-                              }
-                              className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-blue-500"
-                            >
-                              {GOAL_TYPE_OPTIONS.map((option) => (
-                                <option
-                                  key={option.value}
-                                  value={option.value}
-                                >
-                                  {option.label}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-
-                          <div>
-                            <label className="text-sm text-slate-300">
-                              Target Amount
-                            </label>
-                            <input
-                              value={editTargetAmount}
-                              onChange={(event) =>
-                                setEditTargetAmount(event.target.value)
-                              }
-                              type="number"
-                              step="0.01"
-                              className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-blue-500"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="text-sm text-slate-300">
-                              Current Amount
-                            </label>
-                            <input
-                              value={editCurrentAmount}
-                              onChange={(event) =>
-                                setEditCurrentAmount(event.target.value)
-                              }
-                              type="number"
-                              step="0.01"
-                              className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-blue-500"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="text-sm text-slate-300">
-                              Target Date
-                            </label>
-                            <input
-                              value={editTargetDate}
-                              onChange={(event) =>
-                                setEditTargetDate(event.target.value)
-                              }
-                              type="date"
-                              className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-blue-500"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="text-sm text-slate-300">
-                              Monthly Contribution
-                            </label>
-                            <input
-                              value={editMonthlyContribution}
-                              onChange={(event) =>
-                                setEditMonthlyContribution(event.target.value)
-                              }
-                              type="number"
-                              step="0.01"
-                              className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-blue-500"
-                            />
-                          </div>
-
-                          <div className="lg:col-span-2">
-                            <label className="text-sm text-slate-300">
-                              Notes
-                            </label>
-                            <textarea
-                              value={editNotes}
-                              onChange={(event) =>
-                                setEditNotes(event.target.value)
-                              }
-                              rows={3}
-                              className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-blue-500"
-                            />
-                          </div>
-
-                          <div className="flex flex-wrap gap-2 lg:col-span-2">
-                            <button
-                              type="button"
-                              onClick={() => saveGoalEdit(goal.id)}
-                              disabled={isBusy}
-                              className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-60"
-                            >
-                              {updatingId === goal.id ? "Saving..." : "Save"}
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={cancelEditing}
-                              disabled={isBusy}
-                              className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800 disabled:opacity-60"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <>
-                          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    return (
+                      <div
+                        key={goal.id}
+                        className="min-w-0 rounded-2xl border border-slate-800 bg-slate-950 p-5"
+                      >
+                        {isEditing ? (
+                          <div className="space-y-4">
                             <div>
-                              <div className="flex flex-wrap items-center gap-2">
-                                <h3 className="text-lg font-medium">
-                                  {goal.name}
-                                </h3>
-                                <GoalTypeBadge type={goal.goal_type} />
-                                {isComplete && (
-                                  <span className="rounded-full bg-emerald-500/10 px-2 py-1 text-xs text-emerald-300">
-                                    Complete
-                                  </span>
-                                )}
-                              </div>
-
-                              <p className="mt-1 text-sm text-slate-400">
-                                {formatCurrency(Number(goal.current_amount))} of{" "}
-                                {formatCurrency(Number(goal.target_amount))}
-                              </p>
-
-                              {goal.target_date && (
-                                <p className="mt-1 text-xs text-slate-500">
-                                  Target date: {goal.target_date}
-                                </p>
-                              )}
-                            </div>
-
-                            <div className="flex flex-wrap gap-2">
-                              <button
-                                type="button"
-                                onClick={() => startEditing(goal)}
-                                disabled={isBusy}
-                                className="rounded-lg border border-blue-900 px-3 py-1 text-xs text-blue-300 hover:bg-blue-950 disabled:opacity-60"
-                              >
-                                Edit
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={() => deleteGoal(goal)}
-                                disabled={isBusy}
-                                className="rounded-lg border border-red-900 px-3 py-1 text-xs text-red-300 hover:bg-red-950 disabled:opacity-60"
-                              >
-                                {deletingId === goal.id
-                                  ? "Deleting..."
-                                  : "Delete"}
-                              </button>
-                            </div>
-                          </div>
-
-                          <div className="mt-4">
-                            <div className="h-3 w-full rounded-full bg-slate-800">
-                              <div
-                                className={
-                                  isComplete
-                                    ? "h-3 rounded-full bg-emerald-500"
-                                    : "h-3 rounded-full bg-blue-500"
+                              <label className="text-sm text-slate-300">
+                                Goal Name
+                              </label>
+                              <input
+                                value={editName}
+                                onChange={(event) =>
+                                  setEditName(event.target.value)
                                 }
-                                style={{ width: `${progress}%` }}
+                                className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-blue-500"
                               />
                             </div>
 
-                            <div className="mt-2 flex justify-between text-xs text-slate-500">
-                              <span>{Math.round(progress)}% complete</span>
-                              <span>{formatCurrency(remaining)} remaining</span>
+                            <div>
+                              <label className="text-sm text-slate-300">
+                                Goal Type
+                              </label>
+                              <select
+                                value={editGoalType}
+                                onChange={(event) =>
+                                  setEditGoalType(
+                                    event.target.value as GoalType
+                                  )
+                                }
+                                className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                              >
+                                {GOAL_TYPE_OPTIONS.map((option) => (
+                                  <option
+                                    key={option.value}
+                                    value={option.value}
+                                  >
+                                    {option.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+
+                            <div className="grid gap-4 sm:grid-cols-2">
+                              <div>
+                                <label className="text-sm text-slate-300">
+                                  Target Amount
+                                </label>
+                                <input
+                                  value={editTargetAmount}
+                                  onChange={(event) =>
+                                    setEditTargetAmount(event.target.value)
+                                  }
+                                  type="number"
+                                  step="0.01"
+                                  className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="text-sm text-slate-300">
+                                  Current Amount
+                                </label>
+                                <input
+                                  value={editCurrentAmount}
+                                  onChange={(event) =>
+                                    setEditCurrentAmount(event.target.value)
+                                  }
+                                  type="number"
+                                  step="0.01"
+                                  className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="grid gap-4 sm:grid-cols-2">
+                              <div>
+                                <label className="text-sm text-slate-300">
+                                  Target Date
+                                </label>
+                                <input
+                                  value={editTargetDate}
+                                  onChange={(event) =>
+                                    setEditTargetDate(event.target.value)
+                                  }
+                                  type="date"
+                                  className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="text-sm text-slate-300">
+                                  Monthly Contribution
+                                </label>
+                                <input
+                                  value={editMonthlyContribution}
+                                  onChange={(event) =>
+                                    setEditMonthlyContribution(
+                                      event.target.value
+                                    )
+                                  }
+                                  type="number"
+                                  step="0.01"
+                                  className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                                />
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="text-sm text-slate-300">
+                                Notes
+                              </label>
+                              <textarea
+                                value={editNotes}
+                                onChange={(event) =>
+                                  setEditNotes(event.target.value)
+                                }
+                                rows={3}
+                                className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                              />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2 pt-2">
+                              <button
+                                type="button"
+                                onClick={() => saveGoalEdit(goal.id)}
+                                disabled={isBusy}
+                                className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-60"
+                              >
+                                {updatingId === goal.id ? "Saving..." : "Save"}
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={cancelEditing}
+                                disabled={isBusy}
+                                className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800 disabled:opacity-60"
+                              >
+                                Cancel
+                              </button>
                             </div>
                           </div>
+                        ) : (
+                          <>
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                              <div className="min-w-0">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <h3 className="break-words text-lg font-medium">
+                                    {goal.name}
+                                  </h3>
+                                  <GoalTypeBadge type={goal.goal_type} />
+                                  {isComplete && (
+                                    <span className="rounded-full bg-emerald-500/10 px-2 py-1 text-xs text-emerald-300">
+                                      Complete
+                                    </span>
+                                  )}
+                                </div>
 
-                          <div className="mt-5 grid gap-4 md:grid-cols-3">
-                            <MiniStat
-                              label="Monthly Needed"
-                              value={formatCurrency(requiredMonthly)}
-                            />
-                            <MiniStat
-                              label="Your Monthly Plan"
-                              value={formatCurrency(
-                                Number(goal.monthly_contribution || 0)
-                              )}
-                            />
-                            <MiniStat
-                              label="Months Left"
-                              value={monthsLeft > 0 ? String(monthsLeft) : "N/A"}
-                            />
-                          </div>
+                                {goal.target_date && (
+                                  <p className="mt-2 text-xs text-slate-500">
+                                    Target date: {goal.target_date}
+                                  </p>
+                                )}
+                              </div>
 
-                          <div className="mt-5 grid gap-3 md:grid-cols-[1fr_auto_auto]">
-                            <input
-                              value={goal.current_amount}
-                              onChange={(event) =>
-                                updateGoalProgress(goal, event.target.value)
-                              }
-                              type="number"
-                              step="0.01"
-                              className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-blue-500"
-                            />
+                              <div className="flex shrink-0 gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => startEditing(goal)}
+                                  disabled={isBusy}
+                                  className="rounded-lg border border-blue-900 px-3 py-2 text-xs text-blue-300 hover:bg-blue-950 disabled:opacity-60"
+                                >
+                                  Edit
+                                </button>
 
-                            <button
-                              type="button"
-                              onClick={() =>
-                                addContribution(
-                                  goal,
-                                  Number(goal.monthly_contribution || 0)
-                                )
-                              }
-                              disabled={isBusy}
-                              className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800 disabled:opacity-60"
-                            >
-                              {updatingId === goal.id
-                                ? "Updating..."
-                                : "Add Monthly"}
-                            </button>
+                                <button
+                                  type="button"
+                                  onClick={() => deleteGoal(goal)}
+                                  disabled={isBusy}
+                                  className="rounded-lg border border-red-900 px-3 py-2 text-xs text-red-300 hover:bg-red-950 disabled:opacity-60"
+                                >
+                                  {deletingId === goal.id
+                                    ? "Deleting..."
+                                    : "Delete"}
+                                </button>
+                              </div>
+                            </div>
 
-                            <button
-                              type="button"
-                              onClick={() => addContribution(goal, 100)}
-                              disabled={isBusy}
-                              className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800 disabled:opacity-60"
-                            >
-                              +$100
-                            </button>
-                          </div>
+                            <div className="mt-5">
+                              <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                                <div>
+                                  <p className="text-xs text-slate-500">
+                                    Progress
+                                  </p>
+                                  <p className="mt-1 text-xl font-semibold">
+                                    {formatCurrency(
+                                      Number(goal.current_amount)
+                                    )}{" "}
+                                    <span className="text-sm font-normal text-slate-500">
+                                      /{" "}
+                                      {formatCurrency(
+                                        Number(goal.target_amount)
+                                      )}
+                                    </span>
+                                  </p>
+                                </div>
 
-                          {goal.notes && (
-                            <p className="mt-4 rounded-xl border border-slate-800 bg-slate-900 p-3 text-sm text-slate-400">
-                              {goal.notes}
-                            </p>
-                          )}
+                                <p className="text-sm text-slate-400">
+                                  {Math.round(progress)}% complete
+                                </p>
+                              </div>
 
-                          <div className="mt-4 rounded-xl border border-blue-900 bg-blue-950/30 p-3 text-sm text-blue-100/80">
-                            {getGoalInsight(goal, requiredMonthly, monthsLeft)}
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  );
-                })}
+                              <div className="mt-3 h-3 w-full rounded-full bg-slate-800">
+                                <div
+                                  className={
+                                    isComplete
+                                      ? "h-3 rounded-full bg-emerald-500"
+                                      : "h-3 rounded-full bg-blue-500"
+                                  }
+                                  style={{ width: `${progress}%` }}
+                                />
+                              </div>
+                            </div>
 
-                {goals.length === 0 && (
-                  <div className="rounded-2xl border border-slate-800 bg-slate-950 p-10 text-center text-slate-500">
-                    No Supabase goals yet. Add your first goal or import old
-                    local goals.
-                  </div>
-                )}
-              </div>
+                            <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                              <MiniStat
+                                label="Remaining"
+                                value={formatCurrency(remaining)}
+                              />
+                              <MiniStat
+                                label="Monthly Needed"
+                                value={formatCurrency(requiredMonthly)}
+                              />
+                              <MiniStat
+                                label="Months Left"
+                                value={
+                                  monthsLeft > 0 ? String(monthsLeft) : "N/A"
+                                }
+                              />
+                            </div>
+
+                            <div className="mt-5">
+                              <label className="text-xs text-slate-400">
+                                Update Current Amount
+                              </label>
+                              <input
+                                value={goal.current_amount}
+                                onChange={(event) =>
+                                  updateGoalProgress(goal, event.target.value)
+                                }
+                                type="number"
+                                step="0.01"
+                                className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                              />
+                            </div>
+
+                            <div className="mt-4 grid grid-cols-2 gap-2">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  addContribution(
+                                    goal,
+                                    Number(goal.monthly_contribution || 0)
+                                  )
+                                }
+                                disabled={isBusy}
+                                className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800 disabled:opacity-60"
+                              >
+                                {updatingId === goal.id
+                                  ? "Updating..."
+                                  : "Add Monthly"}
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => addContribution(goal, 100)}
+                                disabled={isBusy}
+                                className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800 disabled:opacity-60"
+                              >
+                                +$100
+                              </button>
+                            </div>
+
+                            {goal.notes && (
+                              <p className="mt-4 break-words rounded-xl border border-slate-800 bg-slate-900 p-3 text-sm text-slate-400">
+                                {goal.notes}
+                              </p>
+                            )}
+
+                            <div className="mt-4 rounded-xl border border-blue-900 bg-blue-950/30 p-3 text-sm text-blue-100/80">
+                              {getGoalInsight(goal, requiredMonthly, monthsLeft)}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </section>
           </div>
         </div>
@@ -996,11 +904,21 @@ function SummaryCard({ title, value }: { title: string; value: string }) {
   );
 }
 
-function MiniStat({ label, value }: { label: string; value: string }) {
+function MiniStat({
+  label,
+  value,
+  valueClass = "text-slate-200",
+}: {
+  label: string;
+  value: string;
+  valueClass?: string;
+}) {
   return (
     <div className="rounded-xl border border-slate-800 bg-slate-900 p-3">
       <p className="text-xs text-slate-500">{label}</p>
-      <p className="mt-1 text-sm font-medium text-slate-200">{value}</p>
+      <p className={`mt-1 break-words text-sm font-medium ${valueClass}`}>
+        {value}
+      </p>
     </div>
   );
 }
