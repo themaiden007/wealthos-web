@@ -6,66 +6,77 @@ import AppNav from "@/components/AppNav";
 import { useToast } from "@/components/ToastProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
 
-type GoalType =
-  | "emergency_fund"
-  | "debt_payoff"
-  | "investment"
-  | "large_purchase"
-  | "savings"
-  | "other";
+type TransactionType = "income" | "expense" | "transfer";
 
-type Goal = {
+type Transaction = {
   id: string;
   user_id: string;
+  account_id: string;
+  date: string;
   name: string;
-  goal_type: GoalType;
-  target_amount: number;
-  current_amount: number;
-  target_date: string | null;
-  monthly_contribution: number;
+  merchant_name: string | null;
+  amount: number;
+  transaction_type: TransactionType;
+  category: string;
   notes: string | null;
+  source: string;
   created_at: string;
   updated_at: string;
 };
 
-const GOAL_TYPE_OPTIONS: { label: string; value: GoalType }[] = [
-  { label: "Emergency Fund", value: "emergency_fund" },
-  { label: "Debt Payoff", value: "debt_payoff" },
-  { label: "Investment", value: "investment" },
-  { label: "Large Purchase", value: "large_purchase" },
-  { label: "Savings", value: "savings" },
-  { label: "Other", value: "other" },
+type BudgetItem = {
+  id: string;
+  user_id: string;
+  category: string;
+  planned_amount: number;
+  created_at: string;
+  updated_at: string;
+};
+
+const DEFAULT_BUDGET_CATEGORIES = [
+  "Groceries",
+  "Restaurants",
+  "Coffee",
+  "Rent/Mortgage",
+  "Utilities",
+  "Internet",
+  "Transportation",
+  "Fuel",
+  "Car Payment",
+  "Insurance",
+  "Shopping",
+  "Entertainment",
+  "Subscriptions",
+  "Travel",
+  "Healthcare",
+  "Fitness",
+  "Investment",
+  "Loan Payment",
+  "Other",
 ];
 
-export default function GoalsPage() {
+export default function BudgetPage() {
   const { showToast } = useToast();
   const { confirm } = useConfirm();
 
-  const [goals, setGoals] = useState<Goal[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [budgetItems, setBudgetItems] = useState<BudgetItem[]>([]);
   const [userId, setUserId] = useState("");
   const [userEmail, setUserEmail] = useState("");
   const [hasLoaded, setHasLoaded] = useState(false);
 
-  const [saving, setSaving] = useState(false);
-  const [updatingId, setUpdatingId] = useState("");
-  const [deletingId, setDeletingId] = useState("");
+  const [savingCategory, setSavingCategory] = useState("");
+  const [deletingCategory, setDeletingCategory] = useState("");
+  const [resetting, setResetting] = useState(false);
+  const [autofilling, setAutofilling] = useState(false);
+  const [addingCategory, setAddingCategory] = useState(false);
 
-  const [name, setName] = useState("");
-  const [goalType, setGoalType] = useState<GoalType>("savings");
-  const [targetAmount, setTargetAmount] = useState("");
-  const [currentAmount, setCurrentAmount] = useState("");
-  const [targetDate, setTargetDate] = useState("");
-  const [monthlyContribution, setMonthlyContribution] = useState("");
-  const [notes, setNotes] = useState("");
+  const [selectedMonth, setSelectedMonth] = useState(
+    new Date().toISOString().slice(0, 7)
+  );
 
-  const [editingId, setEditingId] = useState("");
-  const [editName, setEditName] = useState("");
-  const [editGoalType, setEditGoalType] = useState<GoalType>("savings");
-  const [editTargetAmount, setEditTargetAmount] = useState("");
-  const [editCurrentAmount, setEditCurrentAmount] = useState("");
-  const [editTargetDate, setEditTargetDate] = useState("");
-  const [editMonthlyContribution, setEditMonthlyContribution] = useState("");
-  const [editNotes, setEditNotes] = useState("");
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [newCategoryBudget, setNewCategoryBudget] = useState("");
 
   useEffect(() => {
     async function initialize() {
@@ -81,20 +92,66 @@ export default function GoalsPage() {
       setUserId(user.id);
       setUserEmail(user.email || "");
 
-      const { data, error } = await supabase
-        .from("goals")
+      const { data: transactionData, error: transactionError } = await supabase
+        .from("transactions")
         .select("*")
         .eq("user_id", user.id)
-        .order("created_at", { ascending: false });
+        .order("date", { ascending: false });
 
-      if (error) {
+      if (transactionError) {
         showToast({
           type: "error",
-          title: "Failed to load goals",
-          message: error.message,
+          title: "Failed to load transactions",
+          message: transactionError.message,
         });
+        setHasLoaded(true);
+        return;
+      }
+
+      const { data: budgetData, error: budgetError } = await supabase
+        .from("budget_items")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("category", { ascending: true });
+
+      if (budgetError) {
+        showToast({
+          type: "error",
+          title: "Failed to load budget",
+          message: budgetError.message,
+        });
+        setHasLoaded(true);
+        return;
+      }
+
+      setTransactions((transactionData || []) as Transaction[]);
+
+      if (!budgetData || budgetData.length === 0) {
+        const starterRows = DEFAULT_BUDGET_CATEGORIES.map((category) => ({
+          user_id: user.id,
+          category,
+          planned_amount: 0,
+          updated_at: new Date().toISOString(),
+        }));
+
+        const { data: inserted, error: insertError } = await supabase
+          .from("budget_items")
+          .upsert(starterRows, {
+            onConflict: "user_id,category",
+          })
+          .select();
+
+        if (insertError) {
+          showToast({
+            type: "error",
+            title: "Failed to create starter budget",
+            message: insertError.message,
+          });
+        } else {
+          setBudgetItems((inserted || []) as BudgetItem[]);
+        }
       } else {
-        setGoals((data || []) as Goal[]);
+        setBudgetItems(budgetData as BudgetItem[]);
       }
 
       setHasLoaded(true);
@@ -103,381 +160,350 @@ export default function GoalsPage() {
     initialize();
   }, [showToast]);
 
+  const budgetRows = useMemo(() => {
+    const monthTransactions = transactions.filter(
+      (transaction) =>
+        transaction.date.startsWith(selectedMonth) &&
+        transaction.transaction_type === "expense"
+    );
+
+    return budgetItems
+      .map((item) => {
+        const actualAmount = monthTransactions
+          .filter((transaction) => transaction.category === item.category)
+          .reduce(
+            (sum, transaction) => sum + Math.abs(Number(transaction.amount)),
+            0
+          );
+
+        const plannedAmount = Number(item.planned_amount || 0);
+        const remaining = plannedAmount - actualAmount;
+        const percentUsed =
+          plannedAmount > 0
+            ? Math.min((actualAmount / plannedAmount) * 100, 999)
+            : actualAmount > 0
+            ? 999
+            : 0;
+
+        return {
+          id: item.id,
+          category: item.category,
+          plannedAmount,
+          actualAmount,
+          remaining,
+          percentUsed,
+          status:
+            plannedAmount === 0 && actualAmount > 0
+              ? "unplanned"
+              : remaining < 0
+              ? "over"
+              : percentUsed >= 80
+              ? "warning"
+              : "good",
+        };
+      })
+      .sort((a, b) => {
+        if (a.actualAmount !== b.actualAmount) {
+          return b.actualAmount - a.actualAmount;
+        }
+
+        return a.category.localeCompare(b.category);
+      });
+  }, [transactions, budgetItems, selectedMonth]);
+
   const summary = useMemo(() => {
-    const totalTarget = goals.reduce(
-      (sum, goal) => sum + Number(goal.target_amount || 0),
+    const totalPlanned = budgetRows.reduce(
+      (sum, row) => sum + row.plannedAmount,
       0
     );
 
-    const totalCurrent = goals.reduce(
-      (sum, goal) => sum + Number(goal.current_amount || 0),
+    const totalActual = budgetRows.reduce(
+      (sum, row) => sum + row.actualAmount,
       0
     );
 
-    const totalRemaining = Math.max(totalTarget - totalCurrent, 0);
+    const totalRemaining = totalPlanned - totalActual;
+    const overBudgetCount = budgetRows.filter((row) => row.remaining < 0).length;
 
-    const activeGoals = goals.filter(
-      (goal) => Number(goal.current_amount) < Number(goal.target_amount)
-    ).length;
-
-    const completedGoals = goals.filter(
-      (goal) => Number(goal.current_amount) >= Number(goal.target_amount)
-    ).length;
+    const unplannedSpending = budgetRows
+      .filter((row) => row.status === "unplanned")
+      .reduce((sum, row) => sum + row.actualAmount, 0);
 
     return {
-      totalTarget,
-      totalCurrent,
+      totalPlanned,
+      totalActual,
       totalRemaining,
-      activeGoals,
-      completedGoals,
-      progress:
-        totalTarget > 0 ? Math.min((totalCurrent / totalTarget) * 100, 100) : 0,
+      overBudgetCount,
+      unplannedSpending,
     };
-  }, [goals]);
+  }, [budgetRows]);
 
-  async function addGoal(event: React.FormEvent<HTMLFormElement>) {
+  async function updateBudget(rowId: string, value: string) {
+    const parsed = Number(value);
+    const plannedAmount = Number.isNaN(parsed) ? 0 : Math.max(parsed, 0);
+
+    setBudgetItems((current) =>
+      current.map((item) =>
+        item.id === rowId ? { ...item, planned_amount: plannedAmount } : item
+      )
+    );
+
+    setSavingCategory(rowId);
+
+    const { error } = await supabase
+      .from("budget_items")
+      .update({
+        planned_amount: plannedAmount,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", rowId);
+
+    setSavingCategory("");
+
+    if (error) {
+      showToast({
+        type: "error",
+        title: "Failed to update budget",
+        message: error.message,
+      });
+      return;
+    }
+
+    showToast({
+      type: "success",
+      title: "Budget updated",
+      message: "Planned amount was saved.",
+    });
+  }
+
+  async function addCustomCategory(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (!userId) {
       showToast({
         type: "error",
         title: "You must be logged in",
-        message: "Please log in before adding a goal.",
+        message: "Please log in before adding a budget category.",
       });
       return;
     }
 
-    if (!name.trim()) {
+    const category = newCategoryName.trim();
+
+    if (!category) {
       showToast({
         type: "warning",
-        title: "Goal name required",
-        message: "Please enter a goal name.",
+        title: "Category name required",
+        message: "Please enter a category name.",
       });
       return;
     }
 
-    const parsedTarget = Number(targetAmount);
-    const parsedCurrent = Number(currentAmount || 0);
-    const parsedMonthlyContribution = Number(monthlyContribution || 0);
+    const alreadyExists = budgetItems.some(
+      (item) => item.category.toLowerCase() === category.toLowerCase()
+    );
 
-    if (Number.isNaN(parsedTarget) || parsedTarget <= 0) {
+    if (alreadyExists) {
       showToast({
         type: "warning",
-        title: "Invalid target amount",
-        message: "Please enter a valid target amount greater than $0.",
+        title: "Category already exists",
+        message: "Choose a different category name.",
       });
       return;
     }
 
-    if (Number.isNaN(parsedCurrent) || parsedCurrent < 0) {
+    const parsedBudget = Number(newCategoryBudget || 0);
+
+    if (Number.isNaN(parsedBudget) || parsedBudget < 0) {
       showToast({
         type: "warning",
-        title: "Invalid current amount",
-        message: "Please enter a valid current amount.",
+        title: "Invalid planned amount",
+        message: "Please enter a valid planned amount.",
       });
       return;
     }
 
-    if (
-      monthlyContribution &&
-      (Number.isNaN(parsedMonthlyContribution) || parsedMonthlyContribution < 0)
-    ) {
-      showToast({
-        type: "warning",
-        title: "Invalid monthly contribution",
-        message: "Please enter a valid monthly contribution.",
-      });
-      return;
-    }
-
-    setSaving(true);
-
-    const payload = {
-      user_id: userId,
-      name: name.trim(),
-      goal_type: goalType,
-      target_amount: parsedTarget,
-      current_amount: parsedCurrent,
-      target_date: targetDate || null,
-      monthly_contribution: parsedMonthlyContribution,
-      notes: notes.trim() || null,
-      updated_at: new Date().toISOString(),
-    };
+    setAddingCategory(true);
 
     const { data, error } = await supabase
-      .from("goals")
-      .insert(payload)
-      .select()
-      .single();
-
-    setSaving(false);
-
-    if (error) {
-      showToast({
-        type: "error",
-        title: "Failed to add goal",
-        message: error.message,
-      });
-      return;
-    }
-
-    setGoals((current) => [data as Goal, ...current]);
-
-    setName("");
-    setGoalType("savings");
-    setTargetAmount("");
-    setCurrentAmount("");
-    setTargetDate("");
-    setMonthlyContribution("");
-    setNotes("");
-
-    showToast({
-      type: "success",
-      title: "Goal added",
-      message: `${payload.name} was added successfully.`,
-    });
-  }
-
-  function startEditing(goal: Goal) {
-    setEditingId(goal.id);
-    setEditName(goal.name);
-    setEditGoalType(goal.goal_type);
-    setEditTargetAmount(String(Number(goal.target_amount || 0)));
-    setEditCurrentAmount(String(Number(goal.current_amount || 0)));
-    setEditTargetDate(goal.target_date || "");
-    setEditMonthlyContribution(String(Number(goal.monthly_contribution || 0)));
-    setEditNotes(goal.notes || "");
-  }
-
-  function cancelEditing() {
-    setEditingId("");
-    setEditName("");
-    setEditGoalType("savings");
-    setEditTargetAmount("");
-    setEditCurrentAmount("");
-    setEditTargetDate("");
-    setEditMonthlyContribution("");
-    setEditNotes("");
-  }
-
-  async function saveGoalEdit(goalId: string) {
-    if (!editName.trim()) {
-      showToast({
-        type: "warning",
-        title: "Goal name required",
-        message: "Please enter a goal name.",
-      });
-      return;
-    }
-
-    const parsedTarget = Number(editTargetAmount);
-    const parsedCurrent = Number(editCurrentAmount || 0);
-    const parsedMonthlyContribution = Number(editMonthlyContribution || 0);
-
-    if (Number.isNaN(parsedTarget) || parsedTarget <= 0) {
-      showToast({
-        type: "warning",
-        title: "Invalid target amount",
-        message: "Please enter a valid target amount greater than $0.",
-      });
-      return;
-    }
-
-    if (Number.isNaN(parsedCurrent) || parsedCurrent < 0) {
-      showToast({
-        type: "warning",
-        title: "Invalid current amount",
-        message: "Please enter a valid current amount.",
-      });
-      return;
-    }
-
-    if (
-      Number.isNaN(parsedMonthlyContribution) ||
-      parsedMonthlyContribution < 0
-    ) {
-      showToast({
-        type: "warning",
-        title: "Invalid monthly contribution",
-        message: "Please enter a valid monthly contribution.",
-      });
-      return;
-    }
-
-    setUpdatingId(goalId);
-
-    const { data, error } = await supabase
-      .from("goals")
-      .update({
-        name: editName.trim(),
-        goal_type: editGoalType,
-        target_amount: parsedTarget,
-        current_amount: parsedCurrent,
-        target_date: editTargetDate || null,
-        monthly_contribution: parsedMonthlyContribution,
-        notes: editNotes.trim() || null,
+      .from("budget_items")
+      .insert({
+        user_id: userId,
+        category,
+        planned_amount: parsedBudget,
         updated_at: new Date().toISOString(),
       })
-      .eq("id", goalId)
       .select()
       .single();
 
-    setUpdatingId("");
+    setAddingCategory(false);
 
     if (error) {
       showToast({
         type: "error",
-        title: "Failed to update goal",
+        title: "Failed to add category",
         message: error.message,
       });
       return;
     }
 
-    setGoals((current) =>
-      current.map((goal) => (goal.id === goalId ? (data as Goal) : goal))
+    setBudgetItems((current) =>
+      [...current, data as BudgetItem].sort((a, b) =>
+        a.category.localeCompare(b.category)
+      )
     );
 
-    cancelEditing();
+    setNewCategoryName("");
+    setNewCategoryBudget("");
 
     showToast({
       type: "success",
-      title: "Goal updated",
-      message: `${editName.trim()} was saved successfully.`,
+      title: "Category added",
+      message: `${category} was added to your budget.`,
     });
   }
 
-  async function deleteGoal(goal: Goal) {
-    const confirmed = confirm(
-      `Delete goal "${goal.name}"?\n\nTarget: ${formatCurrency(
-        Number(goal.target_amount)
-      )}\nCurrent: ${formatCurrency(
-        Number(goal.current_amount)
-      )}\n\nThis will permanently remove the goal from Supabase. This action cannot be undone.`
-    );
+  async function deleteBudgetCategory(row: {
+    id: string;
+    category: string;
+    plannedAmount: number;
+    actualAmount: number;
+  }) {
+    const confirmed = await confirm({
+      title: `Delete ${row.category}?`,
+      message:
+        "This removes the planned budget row only.\n\nIt does not delete transactions in this category.",
+      confirmLabel: "Delete Category",
+      cancelLabel: "Cancel",
+      variant: "danger",
+    });
 
     if (!confirmed) return;
 
-    setDeletingId(goal.id);
+    setDeletingCategory(row.id);
 
-    const { error } = await supabase.from("goals").delete().eq("id", goal.id);
+    const { error } = await supabase
+      .from("budget_items")
+      .delete()
+      .eq("id", row.id);
 
-    setDeletingId("");
+    setDeletingCategory("");
 
     if (error) {
       showToast({
         type: "error",
-        title: "Failed to delete goal",
+        title: "Failed to delete category",
         message: error.message,
       });
       return;
     }
 
-    setGoals((current) => current.filter((item) => item.id !== goal.id));
+    setBudgetItems((current) => current.filter((item) => item.id !== row.id));
 
     showToast({
       type: "success",
-      title: "Goal deleted",
-      message: `${goal.name} was removed.`,
+      title: "Category deleted",
+      message: `${row.category} was removed from your budget.`,
     });
   }
 
-  async function updateGoalProgress(goal: Goal, value: string) {
-    const parsed = Number(value);
+  async function resetBudget() {
+    const confirmed = await confirm({
+      title: "Reset budget?",
+      message:
+        "This will reset all planned budget amounts to $0 and update your Supabase budget rows.",
+      confirmLabel: "Reset Budget",
+      cancelLabel: "Cancel",
+      variant: "warning",
+    });
 
-    if (Number.isNaN(parsed) || parsed < 0) {
-      showToast({
-        type: "warning",
-        title: "Invalid progress amount",
-        message: "Please enter a valid progress amount.",
-      });
-      return;
-    }
+    if (!confirmed) return;
 
-    const safeAmount = Math.min(parsed, Number(goal.target_amount || 0));
-
-    setGoals((current) =>
-      current.map((item) =>
-        item.id === goal.id
-          ? {
-              ...item,
-              current_amount: safeAmount,
-            }
-          : item
-      )
-    );
-
-    setUpdatingId(goal.id);
+    setResetting(true);
 
     const { error } = await supabase
-      .from("goals")
+      .from("budget_items")
       .update({
-        current_amount: safeAmount,
+        planned_amount: 0,
         updated_at: new Date().toISOString(),
       })
-      .eq("id", goal.id);
+      .eq("user_id", userId);
 
-    setUpdatingId("");
+    setResetting(false);
 
     if (error) {
       showToast({
         type: "error",
-        title: "Failed to update progress",
+        title: "Failed to reset budget",
         message: error.message,
       });
+      return;
     }
+
+    setBudgetItems((current) =>
+      current.map((item) => ({ ...item, planned_amount: 0 }))
+    );
+
+    showToast({
+      type: "success",
+      title: "Budget reset",
+      message: "All planned amounts were reset to $0.",
+    });
   }
 
-  async function addContribution(goal: Goal, amount: number) {
-    if (amount <= 0) {
-      showToast({
-        type: "warning",
-        title: "Contribution unavailable",
-        message: "Set a monthly contribution greater than $0 first.",
-      });
-      return;
-    }
+  async function autoFillBudgetFromActuals() {
+    const confirmed = await confirm({
+      title: "Autofill budget?",
+      message:
+        "This will set planned budget amounts equal to actual spending for the selected month.",
+      confirmLabel: "Autofill",
+      cancelLabel: "Cancel",
+      variant: "info",
+    });
 
-    const updatedAmount = Math.min(
-      Number(goal.current_amount || 0) + amount,
-      Number(goal.target_amount || 0)
+    if (!confirmed) return;
+
+    setAutofilling(true);
+
+    const updated = budgetItems.map((item) => {
+      const row = budgetRows.find((budgetRow) => budgetRow.id === item.id);
+
+      return {
+        ...item,
+        planned_amount: row?.actualAmount || 0,
+      };
+    });
+
+    setBudgetItems(updated);
+
+    const updates = updated.map((item) =>
+      supabase
+        .from("budget_items")
+        .update({
+          planned_amount: item.planned_amount,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", item.id)
     );
 
-    setGoals((current) =>
-      current.map((item) =>
-        item.id === goal.id
-          ? {
-              ...item,
-              current_amount: updatedAmount,
-            }
-          : item
-      )
-    );
+    const results = await Promise.all(updates);
+    setAutofilling(false);
 
-    setUpdatingId(goal.id);
+    const failed = results.find((result) => result.error);
 
-    const { error } = await supabase
-      .from("goals")
-      .update({
-        current_amount: updatedAmount,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", goal.id);
-
-    setUpdatingId("");
-
-    if (error) {
+    if (failed?.error) {
       showToast({
         type: "error",
-        title: "Failed to add contribution",
-        message: error.message,
+        title: "Autofill failed",
+        message: failed.error.message,
       });
       return;
     }
 
     showToast({
       type: "success",
-      title: "Contribution added",
-      message: `${formatCurrency(amount)} was added to ${goal.name}.`,
+      title: "Budget autofilled",
+      message: "Planned amounts were set from actual spending.",
     });
   }
 
@@ -488,7 +514,7 @@ export default function GoalsPage() {
 
         <div className="min-w-0 flex-1">
           <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-            Loading goals...
+            Loading budgets...
           </div>
         </div>
       </main>
@@ -503,492 +529,253 @@ export default function GoalsPage() {
         <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
           <div className="mb-8">
             <p className="text-sm text-slate-400">WealthOS</p>
-            <h1 className="mt-2 text-3xl font-semibold">Goals</h1>
+            <h1 className="mt-2 text-3xl font-semibold">Budgets</h1>
             <p className="mt-1 text-sm text-slate-500">
-              Add, edit, track, and manage your financial goals.
+              Plan monthly category spending and compare it against actual
+              transactions.
             </p>
+          </div>
+
+          <div className="mb-6 flex flex-col gap-4 rounded-2xl border border-slate-800 bg-slate-900 p-5 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <label className="text-sm text-slate-300">Budget Month</label>
+              <input
+                value={selectedMonth}
+                onChange={(event) => setSelectedMonth(event.target.value)}
+                type="month"
+                className="mt-1 block rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
+              />
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={autoFillBudgetFromActuals}
+                disabled={autofilling}
+                className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800 disabled:opacity-60"
+              >
+                {autofilling ? "Autofilling..." : "Autofill from Actuals"}
+              </button>
+
+              <button
+                type="button"
+                onClick={resetBudget}
+                disabled={resetting}
+                className="rounded-xl border border-red-900 px-4 py-2 text-sm text-red-300 hover:bg-red-950 disabled:opacity-60"
+              >
+                {resetting ? "Resetting..." : "Reset Budget"}
+              </button>
+            </div>
           </div>
 
           <div className="grid gap-4 md:grid-cols-5">
             <SummaryCard
-              title="Goal Target"
-              value={formatCurrency(summary.totalTarget)}
+              title="Planned"
+              value={formatCurrency(summary.totalPlanned)}
             />
             <SummaryCard
-              title="Saved / Paid"
-              value={formatCurrency(summary.totalCurrent)}
+              title="Actual"
+              value={formatCurrency(summary.totalActual)}
             />
             <SummaryCard
               title="Remaining"
               value={formatCurrency(summary.totalRemaining)}
             />
             <SummaryCard
-              title="Active Goals"
-              value={String(summary.activeGoals)}
+              title="Over Budget"
+              value={String(summary.overBudgetCount)}
             />
             <SummaryCard
-              title="Completed"
-              value={String(summary.completedGoals)}
+              title="Unplanned"
+              value={formatCurrency(summary.unplannedSpending)}
             />
           </div>
 
           <div className="mt-8 grid gap-6 xl:grid-cols-[420px_1fr]">
             <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-              <h2 className="text-lg font-medium">Add Goal</h2>
+              <h2 className="text-lg font-medium">Add Budget Category</h2>
               <p className="mt-1 text-sm text-slate-400">
-                Track emergency funds, debt payoff, investments, and purchases.
+                Create custom categories and set monthly planned amounts.
               </p>
 
-              <form onSubmit={addGoal} noValidate className="mt-5 space-y-4">
+              <form
+                onSubmit={addCustomCategory}
+                noValidate
+                className="mt-5 space-y-4"
+              >
                 <div>
-                  <label className="text-sm text-slate-300">Goal Name</label>
+                  <label className="text-sm text-slate-300">
+                    Category Name
+                  </label>
                   <input
-                    value={name}
-                    onChange={(event) => setName(event.target.value)}
-                    placeholder="Example: Emergency Fund"
-                    className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-sm text-slate-300">Goal Type</label>
-                  <select
-                    value={goalType}
-                    onChange={(event) =>
-                      setGoalType(event.target.value as GoalType)
-                    }
-                    className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
-                  >
-                    {GOAL_TYPE_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-sm text-slate-300">Target Amount</label>
-                  <input
-                    value={targetAmount}
-                    onChange={(event) => setTargetAmount(event.target.value)}
-                    type="number"
-                    step="0.01"
-                    placeholder="Example: 10000"
+                    value={newCategoryName}
+                    onChange={(event) => setNewCategoryName(event.target.value)}
+                    placeholder="Example: Motorcycle Fund"
                     className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
                   />
                 </div>
 
                 <div>
                   <label className="text-sm text-slate-300">
-                    Current Amount
+                    Planned Monthly Amount
                   </label>
                   <input
-                    value={currentAmount}
-                    onChange={(event) => setCurrentAmount(event.target.value)}
-                    type="number"
-                    step="0.01"
-                    placeholder="Example: 2500"
-                    className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-sm text-slate-300">Target Date</label>
-                  <input
-                    value={targetDate}
-                    onChange={(event) => setTargetDate(event.target.value)}
-                    type="date"
-                    className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-sm text-slate-300">
-                    Planned Monthly Contribution
-                  </label>
-                  <input
-                    value={monthlyContribution}
+                    value={newCategoryBudget}
                     onChange={(event) =>
-                      setMonthlyContribution(event.target.value)
+                      setNewCategoryBudget(event.target.value)
                     }
                     type="number"
-                    step="0.01"
-                    placeholder="Example: 500"
-                    className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-sm text-slate-300">Notes</label>
-                  <textarea
-                    value={notes}
-                    onChange={(event) => setNotes(event.target.value)}
-                    rows={3}
-                    placeholder="Optional notes"
+                    step="1"
+                    placeholder="Example: 300"
                     className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
                   />
                 </div>
 
                 <button
                   type="submit"
-                  disabled={saving}
+                  disabled={addingCategory}
                   className="w-full rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium hover:bg-blue-500 disabled:opacity-60"
                 >
-                  {saving ? "Saving..." : "Add Goal"}
+                  {addingCategory ? "Adding..." : "Add Category"}
                 </button>
               </form>
+
+              <div className="mt-6 rounded-xl border border-slate-800 bg-slate-950 p-4">
+                <p className="text-sm font-medium text-slate-200">
+                  Budget Insights
+                </p>
+
+                <div className="mt-4 space-y-4">
+                  <InsightCard
+                    title="Monthly budget status"
+                    text={getBudgetSummaryText(summary)}
+                  />
+
+                  <InsightCard
+                    title="Overspending risk"
+                    text={
+                      summary.overBudgetCount > 0
+                        ? `You are over budget in ${
+                            summary.overBudgetCount
+                          } categor${
+                            summary.overBudgetCount === 1 ? "y" : "ies"
+                          }. Review those categories first.`
+                        : "No categories are over budget right now."
+                    }
+                  />
+
+                  <InsightCard
+                    title="Next recommendation"
+                    text={
+                      summary.totalPlanned === 0
+                        ? "Start by entering planned amounts for your major categories."
+                        : "Keep reviewing budgets weekly and adjust categories as spending changes."
+                    }
+                  />
+                </div>
+              </div>
             </section>
 
             <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
               <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
                 <div>
-                  <h2 className="text-lg font-medium">Goal List</h2>
+                  <h2 className="text-lg font-medium">Category Budget</h2>
                   <p className="text-sm text-slate-400">
-                    {goals.length} goal{goals.length === 1 ? "" : "s"} added
+                    {budgetRows.length} categor
+                    {budgetRows.length === 1 ? "y" : "ies"} tracked
                   </p>
                 </div>
               </div>
 
-              {goals.length === 0 ? (
-                <div className="rounded-2xl border border-slate-800 bg-slate-950 p-10 text-center text-slate-500">
-                  No goals yet. Add your first financial goal.
+              {budgetRows.length === 0 ? (
+                <div className="rounded-2xl border border-slate-800 bg-slate-950 p-8 text-center text-slate-500">
+                  No budget categories yet. Add your first category.
                 </div>
               ) : (
                 <div className="grid gap-4 xl:grid-cols-2 2xl:grid-cols-3">
-                  {goals.map((goal) => {
-                    const isEditing = editingId === goal.id;
-                    const isBusy =
-                      updatingId === goal.id || deletingId === goal.id;
+                  {budgetRows.map((row) => (
+                    <div
+                      key={row.id}
+                      className="min-w-0 rounded-2xl border border-slate-800 bg-slate-950 p-4"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="break-words font-medium">
+                            {row.category}
+                          </p>
+                          <p className="mt-1 text-xs text-slate-500">
+                            {Math.round(row.percentUsed)}% used
+                          </p>
+                        </div>
 
-                    const progress =
-                      Number(goal.target_amount) > 0
-                        ? Math.min(
-                            (Number(goal.current_amount) /
-                              Number(goal.target_amount)) *
-                              100,
-                            100
-                          )
-                        : 0;
+                        <StatusBadge status={row.status} />
+                      </div>
 
-                    const remaining = Math.max(
-                      Number(goal.target_amount) - Number(goal.current_amount),
-                      0
-                    );
+                      <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                        <MiniStat
+                          label="Planned"
+                          value={formatCurrency(row.plannedAmount)}
+                        />
+                        <MiniStat
+                          label="Actual"
+                          value={formatCurrency(row.actualAmount)}
+                        />
+                        <MiniStat
+                          label="Remaining"
+                          value={formatCurrency(row.remaining)}
+                          valueClass={
+                            row.remaining < 0
+                              ? "text-red-300"
+                              : "text-emerald-300"
+                          }
+                        />
+                      </div>
 
-                    const monthsLeft = calculateMonthsLeft(
-                      isEditing ? editTargetDate : goal.target_date || ""
-                    );
+                      <div className="mt-4">
+                        <div className="h-2 w-full rounded-full bg-slate-800">
+                          <div
+                            className={getProgressClass(row.status)}
+                            style={{
+                              width: `${Math.min(row.percentUsed, 100)}%`,
+                            }}
+                          />
+                        </div>
+                      </div>
 
-                    const requiredMonthly =
-                      monthsLeft > 0 ? remaining / monthsLeft : remaining;
-
-                    const isComplete =
-                      Number(goal.current_amount) >= Number(goal.target_amount);
-
-                    return (
-                      <div
-                        key={goal.id}
-                        className="min-w-0 rounded-2xl border border-slate-800 bg-slate-950 p-5"
-                      >
-                        {isEditing ? (
-                          <div className="space-y-4">
-                            <div>
-                              <label className="text-sm text-slate-300">
-                                Goal Name
-                              </label>
-                              <input
-                                value={editName}
-                                onChange={(event) =>
-                                  setEditName(event.target.value)
-                                }
-                                className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-blue-500"
-                              />
-                            </div>
-
-                            <div>
-                              <label className="text-sm text-slate-300">
-                                Goal Type
-                              </label>
-                              <select
-                                value={editGoalType}
-                                onChange={(event) =>
-                                  setEditGoalType(
-                                    event.target.value as GoalType
-                                  )
-                                }
-                                className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-blue-500"
-                              >
-                                {GOAL_TYPE_OPTIONS.map((option) => (
-                                  <option
-                                    key={option.value}
-                                    value={option.value}
-                                  >
-                                    {option.label}
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
-
-                            <div className="grid gap-4 sm:grid-cols-2">
-                              <div>
-                                <label className="text-sm text-slate-300">
-                                  Target Amount
-                                </label>
-                                <input
-                                  value={editTargetAmount}
-                                  onChange={(event) =>
-                                    setEditTargetAmount(event.target.value)
-                                  }
-                                  type="number"
-                                  step="0.01"
-                                  className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-blue-500"
-                                />
-                              </div>
-
-                              <div>
-                                <label className="text-sm text-slate-300">
-                                  Current Amount
-                                </label>
-                                <input
-                                  value={editCurrentAmount}
-                                  onChange={(event) =>
-                                    setEditCurrentAmount(event.target.value)
-                                  }
-                                  type="number"
-                                  step="0.01"
-                                  className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-blue-500"
-                                />
-                              </div>
-                            </div>
-
-                            <div className="grid gap-4 sm:grid-cols-2">
-                              <div>
-                                <label className="text-sm text-slate-300">
-                                  Target Date
-                                </label>
-                                <input
-                                  value={editTargetDate}
-                                  onChange={(event) =>
-                                    setEditTargetDate(event.target.value)
-                                  }
-                                  type="date"
-                                  className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-blue-500"
-                                />
-                              </div>
-
-                              <div>
-                                <label className="text-sm text-slate-300">
-                                  Monthly Contribution
-                                </label>
-                                <input
-                                  value={editMonthlyContribution}
-                                  onChange={(event) =>
-                                    setEditMonthlyContribution(
-                                      event.target.value
-                                    )
-                                  }
-                                  type="number"
-                                  step="0.01"
-                                  className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-blue-500"
-                                />
-                              </div>
-                            </div>
-
-                            <div>
-                              <label className="text-sm text-slate-300">
-                                Notes
-                              </label>
-                              <textarea
-                                value={editNotes}
-                                onChange={(event) =>
-                                  setEditNotes(event.target.value)
-                                }
-                                rows={3}
-                                className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-blue-500"
-                              />
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-2 pt-2">
-                              <button
-                                type="button"
-                                onClick={() => saveGoalEdit(goal.id)}
-                                disabled={isBusy}
-                                className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-60"
-                              >
-                                {updatingId === goal.id ? "Saving..." : "Save"}
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={cancelEditing}
-                                disabled={isBusy}
-                                className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800 disabled:opacity-60"
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <>
-                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                              <div className="min-w-0">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <h3 className="break-words text-lg font-medium">
-                                    {goal.name}
-                                  </h3>
-                                  <GoalTypeBadge type={goal.goal_type} />
-                                  {isComplete && (
-                                    <span className="rounded-full bg-emerald-500/10 px-2 py-1 text-xs text-emerald-300">
-                                      Complete
-                                    </span>
-                                  )}
-                                </div>
-
-                                {goal.target_date && (
-                                  <p className="mt-2 text-xs text-slate-500">
-                                    Target date: {goal.target_date}
-                                  </p>
-                                )}
-                              </div>
-
-                              <div className="flex shrink-0 gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => startEditing(goal)}
-                                  disabled={isBusy}
-                                  className="rounded-lg border border-blue-900 px-3 py-2 text-xs text-blue-300 hover:bg-blue-950 disabled:opacity-60"
-                                >
-                                  Edit
-                                </button>
-
-                                <button
-                                  type="button"
-                                  onClick={() => deleteGoal(goal)}
-                                  disabled={isBusy}
-                                  className="rounded-lg border border-red-900 px-3 py-2 text-xs text-red-300 hover:bg-red-950 disabled:opacity-60"
-                                >
-                                  {deletingId === goal.id
-                                    ? "Deleting..."
-                                    : "Delete"}
-                                </button>
-                              </div>
-                            </div>
-
-                            <div className="mt-5">
-                              <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-                                <div>
-                                  <p className="text-xs text-slate-500">
-                                    Progress
-                                  </p>
-                                  <p className="mt-1 text-xl font-semibold">
-                                    {formatCurrency(
-                                      Number(goal.current_amount)
-                                    )}{" "}
-                                    <span className="text-sm font-normal text-slate-500">
-                                      /{" "}
-                                      {formatCurrency(
-                                        Number(goal.target_amount)
-                                      )}
-                                    </span>
-                                  </p>
-                                </div>
-
-                                <p className="text-sm text-slate-400">
-                                  {Math.round(progress)}% complete
-                                </p>
-                              </div>
-
-                              <div className="mt-3 h-3 w-full rounded-full bg-slate-800">
-                                <div
-                                  className={
-                                    isComplete
-                                      ? "h-3 rounded-full bg-emerald-500"
-                                      : "h-3 rounded-full bg-blue-500"
-                                  }
-                                  style={{ width: `${progress}%` }}
-                                />
-                              </div>
-                            </div>
-
-                            <div className="mt-5 grid gap-3 sm:grid-cols-3">
-                              <MiniStat
-                                label="Remaining"
-                                value={formatCurrency(remaining)}
-                              />
-                              <MiniStat
-                                label="Monthly Needed"
-                                value={formatCurrency(requiredMonthly)}
-                              />
-                              <MiniStat
-                                label="Months Left"
-                                value={
-                                  monthsLeft > 0 ? String(monthsLeft) : "N/A"
-                                }
-                              />
-                            </div>
-
-                            <div className="mt-5">
-                              <label className="text-xs text-slate-400">
-                                Update Current Amount
-                              </label>
-                              <input
-                                value={goal.current_amount}
-                                onChange={(event) =>
-                                  updateGoalProgress(goal, event.target.value)
-                                }
-                                type="number"
-                                step="0.01"
-                                className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-blue-500"
-                              />
-                              {updatingId === goal.id && (
-                                <p className="mt-1 text-xs text-blue-300">
-                                  Saving...
-                                </p>
-                              )}
-                            </div>
-
-                            <div className="mt-4 grid grid-cols-2 gap-2">
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  addContribution(
-                                    goal,
-                                    Number(goal.monthly_contribution || 0)
-                                  )
-                                }
-                                disabled={isBusy}
-                                className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800 disabled:opacity-60"
-                              >
-                                {updatingId === goal.id
-                                  ? "Updating..."
-                                  : "Add Monthly"}
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={() => addContribution(goal, 100)}
-                                disabled={isBusy}
-                                className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800 disabled:opacity-60"
-                              >
-                                +$100
-                              </button>
-                            </div>
-
-                            {goal.notes && (
-                              <p className="mt-4 break-words rounded-xl border border-slate-800 bg-slate-900 p-3 text-sm text-slate-400">
-                                {goal.notes}
-                              </p>
-                            )}
-
-                            <div className="mt-4 rounded-xl border border-blue-900 bg-blue-950/30 p-3 text-sm text-blue-100/80">
-                              {getGoalInsight(goal, requiredMonthly, monthsLeft)}
-                            </div>
-                          </>
+                      <div className="mt-4">
+                        <label className="text-xs text-slate-400">
+                          Planned Amount
+                        </label>
+                        <input
+                          value={row.plannedAmount}
+                          onChange={(event) =>
+                            updateBudget(row.id, event.target.value)
+                          }
+                          type="number"
+                          step="1"
+                          className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                        />
+                        {savingCategory === row.id && (
+                          <p className="mt-1 text-xs text-blue-300">
+                            Saving...
+                          </p>
                         )}
                       </div>
-                    );
-                  })}
+
+                      <div className="mt-4">
+                        <button
+                          type="button"
+                          onClick={() => deleteBudgetCategory(row)}
+                          disabled={deletingCategory === row.id}
+                          className="w-full rounded-xl border border-red-900 px-4 py-2 text-sm text-red-300 hover:bg-red-950 disabled:opacity-60"
+                        >
+                          {deletingCategory === row.id
+                            ? "Deleting..."
+                            : "Delete Category"}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </section>
@@ -999,11 +786,63 @@ export default function GoalsPage() {
   );
 }
 
-function SummaryCard({ title, value }: { title: string; value: string }) {
+function getBudgetSummaryText(summary: {
+  totalPlanned: number;
+  totalActual: number;
+  totalRemaining: number;
+}) {
+  if (summary.totalPlanned === 0) {
+    return "You have not planned a monthly budget yet.";
+  }
+
+  if (summary.totalRemaining >= 0) {
+    return `You have ${formatCurrency(
+      summary.totalRemaining
+    )} remaining from your planned budget.`;
+  }
+
+  return `You are ${formatCurrency(
+    Math.abs(summary.totalRemaining)
+  )} over your planned budget.`;
+}
+
+function getProgressClass(status: string) {
+  const base = "h-2 rounded-full ";
+
+  if (status === "over" || status === "unplanned") return base + "bg-red-500";
+  if (status === "warning") return base + "bg-amber-500";
+  return base + "bg-emerald-500";
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const styles =
+    status === "over" || status === "unplanned"
+      ? "bg-red-500/10 text-red-300"
+      : status === "warning"
+      ? "bg-amber-500/10 text-amber-300"
+      : "bg-emerald-500/10 text-emerald-300";
+
+  const label =
+    status === "over"
+      ? "Over"
+      : status === "unplanned"
+      ? "Unplanned"
+      : status === "warning"
+      ? "Watch"
+      : "Good";
+
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-      <p className="text-sm text-slate-400">{title}</p>
-      <p className="mt-2 text-2xl font-semibold">{value}</p>
+    <span className={`shrink-0 rounded-full px-2 py-1 text-xs ${styles}`}>
+      {label}
+    </span>
+  );
+}
+
+function InsightCard({ title, text }: { title: string; text: string }) {
+  return (
+    <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+      <p className="text-sm font-medium text-slate-200">{title}</p>
+      <p className="mt-1 text-sm text-slate-400">{text}</p>
     </div>
   );
 }
@@ -1027,59 +866,13 @@ function MiniStat({
   );
 }
 
-function GoalTypeBadge({ type }: { type: GoalType }) {
-  const label =
-    GOAL_TYPE_OPTIONS.find((option) => option.value === type)?.label || "Goal";
-
+function SummaryCard({ title, value }: { title: string; value: string }) {
   return (
-    <span className="rounded-full bg-slate-800 px-2 py-1 text-xs text-slate-300">
-      {label}
-    </span>
+    <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+      <p className="text-sm text-slate-400">{title}</p>
+      <p className="mt-2 text-2xl font-semibold">{value}</p>
+    </div>
   );
-}
-
-function calculateMonthsLeft(targetDate: string) {
-  if (!targetDate) return 0;
-
-  const now = new Date();
-  const target = new Date(targetDate);
-
-  if (Number.isNaN(target.getTime()) || target <= now) return 0;
-
-  const years = target.getFullYear() - now.getFullYear();
-  const months = target.getMonth() - now.getMonth();
-
-  return Math.max(years * 12 + months, 1);
-}
-
-function getGoalInsight(
-  goal: Goal,
-  requiredMonthly: number,
-  monthsLeft: number
-) {
-  if (Number(goal.current_amount) >= Number(goal.target_amount)) {
-    return "Goal complete. You can redirect contributions toward the next priority.";
-  }
-
-  if (!goal.target_date) {
-    return "Add a target date to calculate the monthly amount needed to finish this goal on time.";
-  }
-
-  if (monthsLeft <= 0) {
-    return "The target date has passed or is too close. Update the date or increase current progress.";
-  }
-
-  if (Number(goal.monthly_contribution || 0) >= requiredMonthly) {
-    return `You are on pace. Your planned monthly contribution of ${formatCurrency(
-      Number(goal.monthly_contribution || 0)
-    )} is enough to meet this goal.`;
-  }
-
-  return `You may fall short. You need about ${formatCurrency(
-    requiredMonthly
-  )}/month, but your current plan is ${formatCurrency(
-    Number(goal.monthly_contribution || 0)
-  )}/month.`;
 }
 
 function formatCurrency(value: number) {
