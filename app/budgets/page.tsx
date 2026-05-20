@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import AppNav from "@/components/AppNav";
 
 type TransactionType = "income" | "expense" | "transfer";
 
@@ -66,8 +66,11 @@ export default function BudgetPage() {
   const [userId, setUserId] = useState("");
   const [userEmail, setUserEmail] = useState("");
   const [hasLoaded, setHasLoaded] = useState(false);
+
   const [savingCategory, setSavingCategory] = useState("");
   const [importing, setImporting] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [autofilling, setAutofilling] = useState(false);
 
   const [selectedMonth, setSelectedMonth] = useState(
     new Date().toISOString().slice(0, 7)
@@ -118,14 +121,15 @@ export default function BudgetPage() {
           user_id: user.id,
           category,
           planned_amount: 0,
+          updated_at: new Date().toISOString(),
         }));
 
         const { data: inserted, error: insertError } = await supabase
-        .from("budget_items")
-        .upsert(starterRows, {
+          .from("budget_items")
+          .upsert(starterRows, {
             onConflict: "user_id,category",
-        })
-        .select();
+          })
+          .select();
 
         if (insertError) {
           alert(insertError.message);
@@ -240,8 +244,13 @@ export default function BudgetPage() {
   }
 
   async function resetBudget() {
-    const confirmed = confirm("Reset all planned budget amounts to $0?");
+    const confirmed = confirm(
+      "Reset all planned budget amounts to $0?\n\nThis will update your Supabase budget rows."
+    );
+
     if (!confirmed) return;
+
+    setResetting(true);
 
     const { error } = await supabase
       .from("budget_items")
@@ -250,6 +259,8 @@ export default function BudgetPage() {
         updated_at: new Date().toISOString(),
       })
       .eq("user_id", userId);
+
+    setResetting(false);
 
     if (error) {
       alert(error.message);
@@ -263,9 +274,12 @@ export default function BudgetPage() {
 
   async function autoFillBudgetFromActuals() {
     const confirmed = confirm(
-      "Set planned budget amounts equal to actual spending for selected month?"
+      "Set planned budget amounts equal to actual spending for the selected month?"
     );
+
     if (!confirmed) return;
+
+    setAutofilling(true);
 
     const updated = budgetItems.map((item) => {
       const row = budgetRows.find((budgetRow) => budgetRow.id === item.id);
@@ -288,7 +302,14 @@ export default function BudgetPage() {
         .eq("id", item.id)
     );
 
-    await Promise.all(updates);
+    const results = await Promise.all(updates);
+    setAutofilling(false);
+
+    const failed = results.find((result) => result.error);
+
+    if (failed?.error) {
+      alert(failed.error.message);
+    }
   }
 
   async function importOldLocalBudget() {
@@ -319,7 +340,7 @@ export default function BudgetPage() {
     }
 
     const confirmed = confirm(
-      `Import ${parsed.length} old local budget row(s) into Supabase? This will overwrite matching categories.`
+      `Import ${parsed.length} old local budget row(s) into Supabase?\n\nThis will overwrite matching categories.`
     );
 
     if (!confirmed) return;
@@ -351,28 +372,32 @@ export default function BudgetPage() {
     alert(`Imported ${data?.length || 0} budget row(s).`);
   }
 
-  async function logout() {
-    await supabase.auth.signOut();
-    window.location.href = "/login";
-  }
-
   if (!hasLoaded) {
     return (
-      <main className="min-h-screen bg-slate-950 p-8 text-white">
-        Loading budget...
+      <main className="min-h-screen bg-slate-950 text-white md:flex">
+        <AppNav userEmail={userEmail} />
+
+        <div className="min-w-0 flex-1">
+          <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+            Loading budgets...
+          </div>
+        </div>
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen bg-slate-950 text-white">
-      <div className="mx-auto max-w-7xl px-6 py-8">
-        <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
+    <main className="min-h-screen bg-slate-950 text-white md:flex">
+      <AppNav userEmail={userEmail} />
+
+      <div className="min-w-0 flex-1">
+        <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+          <div className="mb-8">
             <p className="text-sm text-slate-400">WealthOS MVP</p>
-            <h1 className="mt-2 text-3xl font-semibold">Budget</h1>
+            <h1 className="mt-2 text-3xl font-semibold">Budgets</h1>
             <p className="mt-1 text-sm text-slate-500">
-              Supabase-backed monthly budget tracking.
+              Plan monthly category spending and compare it against actual
+              Supabase transactions.
             </p>
             {userEmail && (
               <p className="mt-1 text-xs text-slate-600">
@@ -381,206 +406,200 @@ export default function BudgetPage() {
             )}
           </div>
 
-          <div className="flex flex-wrap gap-3">
-            <Link
-              href="/transactions"
-              className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-900"
-            >
-              Transactions
-            </Link>
+          <div className="mb-6 flex flex-col gap-4 rounded-2xl border border-slate-800 bg-slate-900 p-5 md:flex-row md:items-center md:justify-between">
+            <div>
+              <label className="text-sm text-slate-300">Budget Month</label>
+              <input
+                value={selectedMonth}
+                onChange={(event) => setSelectedMonth(event.target.value)}
+                type="month"
+                className="mt-1 block rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
+              />
+            </div>
 
-            <Link
-              href="/"
-              className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-900"
-            >
-              Dashboard
-            </Link>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={autoFillBudgetFromActuals}
+                disabled={autofilling}
+                className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800 disabled:opacity-60"
+              >
+                {autofilling ? "Autofilling..." : "Autofill from Actuals"}
+              </button>
 
-            <button
-              type="button"
-              onClick={importOldLocalBudget}
-              disabled={importing}
-              className="rounded-xl border border-blue-900 px-4 py-2 text-sm text-blue-300 hover:bg-blue-950 disabled:opacity-60"
-            >
-              {importing ? "Importing..." : "Import Old Local Budget"}
-            </button>
-
-            <button
-              type="button"
-              onClick={logout}
-              className="rounded-xl border border-red-900 px-4 py-2 text-sm text-red-300 hover:bg-red-950"
-            >
-              Logout
-            </button>
+              <button
+                type="button"
+                onClick={resetBudget}
+                disabled={resetting}
+                className="rounded-xl border border-red-900 px-4 py-2 text-sm text-red-300 hover:bg-red-950 disabled:opacity-60"
+              >
+                {resetting ? "Resetting..." : "Reset Budget"}
+              </button>
+            </div>
           </div>
-        </div>
 
-        <div className="mb-6 flex flex-col gap-4 rounded-2xl border border-slate-800 bg-slate-900 p-5 md:flex-row md:items-center md:justify-between">
-          <div>
-            <label className="text-sm text-slate-300">Budget Month</label>
-            <input
-              value={selectedMonth}
-              onChange={(event) => setSelectedMonth(event.target.value)}
-              type="month"
-              className="mt-1 block rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
+          <div className="grid gap-4 md:grid-cols-5">
+            <SummaryCard
+              title="Planned"
+              value={formatCurrency(summary.totalPlanned)}
+            />
+            <SummaryCard
+              title="Actual"
+              value={formatCurrency(summary.totalActual)}
+            />
+            <SummaryCard
+              title="Remaining"
+              value={formatCurrency(summary.totalRemaining)}
+            />
+            <SummaryCard
+              title="Over Budget"
+              value={String(summary.overBudgetCount)}
+            />
+            <SummaryCard
+              title="Unplanned"
+              value={formatCurrency(summary.unplannedSpending)}
             />
           </div>
 
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={autoFillBudgetFromActuals}
-              className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800"
-            >
-              Autofill from Actuals
-            </button>
+          <div className="mt-8 grid gap-6 xl:grid-cols-[1fr_380px]">
+            <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+              <div className="mb-4">
+                <h2 className="text-lg font-medium">Category Budget</h2>
+                <p className="text-sm text-slate-400">
+                  Planned amounts save directly to Supabase.
+                </p>
+              </div>
 
-            <button
-              type="button"
-              onClick={resetBudget}
-              className="rounded-xl border border-red-900 px-4 py-2 text-sm text-red-300 hover:bg-red-950"
-            >
-              Reset Budget
-            </button>
-          </div>
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-5">
-          <SummaryCard
-            title="Planned"
-            value={formatCurrency(summary.totalPlanned)}
-          />
-          <SummaryCard
-            title="Actual"
-            value={formatCurrency(summary.totalActual)}
-          />
-          <SummaryCard
-            title="Remaining"
-            value={formatCurrency(summary.totalRemaining)}
-          />
-          <SummaryCard
-            title="Over Budget"
-            value={String(summary.overBudgetCount)}
-          />
-          <SummaryCard
-            title="Unplanned"
-            value={formatCurrency(summary.unplannedSpending)}
-          />
-        </div>
-
-        <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_380px]">
-          <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-            <div className="mb-4">
-              <h2 className="text-lg font-medium">Category Budget</h2>
-              <p className="text-sm text-slate-400">
-                Planned amounts save directly to Supabase.
-              </p>
-            </div>
-
-            <div className="overflow-x-auto rounded-xl border border-slate-800">
-              <table className="w-full min-w-[840px] text-left text-sm">
-                <thead className="bg-slate-950 text-slate-400">
-                  <tr>
-                    <th className="px-4 py-3">Category</th>
-                    <th className="px-4 py-3 text-right">Planned</th>
-                    <th className="px-4 py-3 text-right">Actual</th>
-                    <th className="px-4 py-3 text-right">Remaining</th>
-                    <th className="px-4 py-3">Progress</th>
-                    <th className="px-4 py-3">Status</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {budgetRows.map((row) => (
-                    <tr
-                      key={row.id}
-                      className="border-t border-slate-800 text-slate-200"
-                    >
-                      <td className="px-4 py-3 font-medium">{row.category}</td>
-
-                      <td className="px-4 py-3 text-right">
-                        <input
-                          value={row.plannedAmount}
-                          onChange={(event) =>
-                            updateBudget(row.id, event.target.value)
-                          }
-                          type="number"
-                          step="1"
-                          className="w-28 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-right text-sm outline-none focus:border-blue-500"
-                        />
-                        {savingCategory === row.id && (
-                          <p className="mt-1 text-xs text-blue-300">Saving...</p>
-                        )}
-                      </td>
-
-                      <td className="px-4 py-3 text-right">
-                        {formatCurrency(row.actualAmount)}
-                      </td>
-
-                      <td
-                        className={
-                          row.remaining < 0
-                            ? "px-4 py-3 text-right font-medium text-red-300"
-                            : "px-4 py-3 text-right font-medium text-emerald-300"
-                        }
-                      >
-                        {formatCurrency(row.remaining)}
-                      </td>
-
-                      <td className="px-4 py-3">
-                        <div className="h-2 w-full rounded-full bg-slate-800">
-                          <div
-                            className={getProgressClass(row.status)}
-                            style={{
-                              width: `${Math.min(row.percentUsed, 100)}%`,
-                            }}
-                          />
-                        </div>
-                        <p className="mt-1 text-xs text-slate-500">
-                          {Math.round(row.percentUsed)}% used
-                        </p>
-                      </td>
-
-                      <td className="px-4 py-3">
-                        <StatusBadge status={row.status} />
-                      </td>
+              <div className="overflow-x-auto rounded-xl border border-slate-800">
+                <table className="w-full min-w-[840px] text-left text-sm">
+                  <thead className="bg-slate-950 text-slate-400">
+                    <tr>
+                      <th className="px-4 py-3">Category</th>
+                      <th className="px-4 py-3 text-right">Planned</th>
+                      <th className="px-4 py-3 text-right">Actual</th>
+                      <th className="px-4 py-3 text-right">Remaining</th>
+                      <th className="px-4 py-3">Progress</th>
+                      <th className="px-4 py-3">Status</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
+                  </thead>
 
-          <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-            <h2 className="text-lg font-medium">Budget Insights</h2>
+                  <tbody>
+                    {budgetRows.map((row) => (
+                      <tr
+                        key={row.id}
+                        className="border-t border-slate-800 text-slate-200"
+                      >
+                        <td className="px-4 py-3 font-medium">
+                          {row.category}
+                        </td>
 
-            <div className="mt-5 space-y-4">
-              <InsightCard
-                title="Monthly budget status"
-                text={getBudgetSummaryText(summary)}
-              />
+                        <td className="px-4 py-3 text-right align-top">
+                          <input
+                            value={row.plannedAmount}
+                            onChange={(event) =>
+                              updateBudget(row.id, event.target.value)
+                            }
+                            type="number"
+                            step="1"
+                            className="w-28 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-right text-sm outline-none focus:border-blue-500"
+                          />
+                          {savingCategory === row.id && (
+                            <p className="mt-1 text-xs text-blue-300">
+                              Saving...
+                            </p>
+                          )}
+                        </td>
 
-              <InsightCard
-                title="Overspending risk"
-                text={
-                  summary.overBudgetCount > 0
-                    ? `You are over budget in ${summary.overBudgetCount} categor${
-                        summary.overBudgetCount === 1 ? "y" : "ies"
-                      }. Review those categories first.`
-                    : "No categories are over budget right now."
-                }
-              />
+                        <td className="px-4 py-3 text-right">
+                          {formatCurrency(row.actualAmount)}
+                        </td>
 
-              <InsightCard
-                title="Next recommendation"
-                text={
-                  summary.totalPlanned === 0
-                    ? "Start by entering planned amounts for your major categories."
-                    : "Next, migrate Goals to Supabase so your full plan is cloud-backed."
-                }
-              />
-            </div>
-          </section>
+                        <td
+                          className={
+                            row.remaining < 0
+                              ? "px-4 py-3 text-right font-medium text-red-300"
+                              : "px-4 py-3 text-right font-medium text-emerald-300"
+                          }
+                        >
+                          {formatCurrency(row.remaining)}
+                        </td>
+
+                        <td className="px-4 py-3">
+                          <div className="h-2 w-full rounded-full bg-slate-800">
+                            <div
+                              className={getProgressClass(row.status)}
+                              style={{
+                                width: `${Math.min(row.percentUsed, 100)}%`,
+                              }}
+                            />
+                          </div>
+                          <p className="mt-1 text-xs text-slate-500">
+                            {Math.round(row.percentUsed)}% used
+                          </p>
+                        </td>
+
+                        <td className="px-4 py-3">
+                          <StatusBadge status={row.status} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <aside className="space-y-6">
+              <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+                <h2 className="text-lg font-medium">Budget Insights</h2>
+
+                <div className="mt-5 space-y-4">
+                  <InsightCard
+                    title="Monthly budget status"
+                    text={getBudgetSummaryText(summary)}
+                  />
+
+                  <InsightCard
+                    title="Overspending risk"
+                    text={
+                      summary.overBudgetCount > 0
+                        ? `You are over budget in ${
+                            summary.overBudgetCount
+                          } categor${
+                            summary.overBudgetCount === 1 ? "y" : "ies"
+                          }. Review those categories first.`
+                        : "No categories are over budget right now."
+                    }
+                  />
+
+                  <InsightCard
+                    title="Next recommendation"
+                    text={
+                      summary.totalPlanned === 0
+                        ? "Start by entering planned amounts for your major categories."
+                        : "Keep reviewing budgets weekly and adjust categories as spending changes."
+                    }
+                  />
+                </div>
+              </section>
+
+              <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+                <h2 className="text-lg font-medium">Migration Utility</h2>
+                <p className="mt-1 text-sm text-slate-400">
+                  Use only if you still need to import old browser-stored budget
+                  rows.
+                </p>
+
+                <button
+                  type="button"
+                  onClick={importOldLocalBudget}
+                  disabled={importing}
+                  className="mt-4 w-full rounded-xl border border-blue-900 px-4 py-2 text-sm text-blue-300 hover:bg-blue-950 disabled:opacity-60"
+                >
+                  {importing ? "Importing..." : "Import Old Local Budget"}
+                </button>
+              </section>
+            </aside>
+          </div>
         </div>
       </div>
     </main>
@@ -632,7 +651,9 @@ function StatusBadge({ status }: { status: string }) {
       ? "Watch"
       : "Good";
 
-  return <span className={`rounded-full px-2 py-1 text-xs ${styles}`}>{label}</span>;
+  return (
+    <span className={`rounded-full px-2 py-1 text-xs ${styles}`}>{label}</span>
+  );
 }
 
 function InsightCard({ title, text }: { title: string; text: string }) {
