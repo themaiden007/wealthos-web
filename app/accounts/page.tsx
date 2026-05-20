@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import AppNav from "@/components/AppNav";
 
 type AccountType =
   | "checking"
@@ -68,11 +68,20 @@ export default function AccountsPage() {
   const [hasLoaded, setHasLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [updatingId, setUpdatingId] = useState("");
+  const [deletingId, setDeletingId] = useState("");
 
   const [name, setName] = useState("");
   const [institutionName, setInstitutionName] = useState("");
   const [accountType, setAccountType] = useState<AccountType>("checking");
   const [balance, setBalance] = useState("");
+
+  const [editingId, setEditingId] = useState("");
+  const [editName, setEditName] = useState("");
+  const [editInstitutionName, setEditInstitutionName] = useState("");
+  const [editAccountType, setEditAccountType] =
+    useState<AccountType>("checking");
+  const [editBalance, setEditBalance] = useState("");
 
   useEffect(() => {
     async function initialize() {
@@ -180,6 +189,66 @@ export default function AccountsPage() {
     setBalance("");
   }
 
+  function startEditing(account: Account) {
+    setEditingId(account.id);
+    setEditName(account.name);
+    setEditInstitutionName(account.institution_name || "");
+    setEditAccountType(account.account_type);
+    setEditBalance(String(Number(account.balance || 0)));
+  }
+
+  function cancelEditing() {
+    setEditingId("");
+    setEditName("");
+    setEditInstitutionName("");
+    setEditAccountType("checking");
+    setEditBalance("");
+  }
+
+  async function saveAccountEdit(accountId: string) {
+    if (!editName.trim()) {
+      alert("Please enter an account name.");
+      return;
+    }
+
+    const parsedBalance = Number(editBalance);
+
+    if (Number.isNaN(parsedBalance)) {
+      alert("Please enter a valid balance.");
+      return;
+    }
+
+    setUpdatingId(accountId);
+
+    const { data, error } = await supabase
+      .from("accounts")
+      .update({
+        name: editName.trim(),
+        institution_name: editInstitutionName.trim() || "Manual",
+        account_type: editAccountType,
+        balance: parsedBalance,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", accountId)
+      .select()
+      .single();
+
+    setUpdatingId("");
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    setAccounts((current) =>
+      current.map((account) =>
+        account.id === accountId ? (data as Account) : account
+      )
+    );
+
+    cancelEditing();
+  }
+
   async function importOldLocalAccounts() {
     if (!userId) {
       alert("You must be logged in.");
@@ -264,22 +333,32 @@ export default function AccountsPage() {
     alert(`Imported ${data?.length || 0} old local account(s) into Supabase.`);
   }
 
-  async function deleteAccount(id: string) {
-    const confirmed = confirm("Delete this account?");
+  async function deleteAccount(account: Account) {
+    const confirmed = confirm(
+      `Delete "${account.name}"?\n\nThis will permanently remove the account from Supabase. This action cannot be undone.`
+    );
 
     if (!confirmed) return;
 
-    const { error } = await supabase.from("accounts").delete().eq("id", id);
+    setDeletingId(account.id);
+
+    const { error } = await supabase.from("accounts").delete().eq("id", account.id);
+
+    setDeletingId("");
 
     if (error) {
       alert(error.message);
       return;
     }
 
-    setAccounts((current) => current.filter((account) => account.id !== id));
+    setAccounts((current) =>
+      current.filter((item) => item.id !== account.id)
+    );
   }
 
   async function toggleAccountStatus(account: Account) {
+    setUpdatingId(account.id);
+
     const { data, error } = await supabase
       .from("accounts")
       .update({
@@ -289,6 +368,8 @@ export default function AccountsPage() {
       .eq("id", account.id)
       .select()
       .single();
+
+    setUpdatingId("");
 
     if (error) {
       alert(error.message);
@@ -300,26 +381,32 @@ export default function AccountsPage() {
     );
   }
 
-  async function logout() {
-    await supabase.auth.signOut();
-    window.location.href = "/login";
-  }
-
   if (!hasLoaded) {
     return (
-      <main className="min-h-screen bg-slate-950 p-8 text-white">
-        Loading accounts...
+      <main className="min-h-screen bg-slate-950 text-white md:flex">
+        <AppNav userEmail={userEmail} />
+
+        <div className="min-w-0 flex-1">
+          <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+            Loading accounts...
+          </div>
+        </div>
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen bg-slate-950 text-white">
-      <div className="mx-auto max-w-7xl px-6 py-8">
-        <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
+    <main className="min-h-screen bg-slate-950 text-white md:flex">
+      <AppNav userEmail={userEmail} />
+
+      <div className="min-w-0 flex-1">
+        <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+          <div className="mb-8">
             <p className="text-sm text-slate-400">WealthOS MVP</p>
             <h1 className="mt-2 text-3xl font-semibold">Accounts</h1>
+            <p className="mt-1 text-sm text-slate-500">
+              Add, edit, archive, and manage Supabase-backed accounts.
+            </p>
             {userEmail && (
               <p className="mt-1 text-xs text-slate-600">
                 Logged in as {userEmail}
@@ -327,195 +414,291 @@ export default function AccountsPage() {
             )}
           </div>
 
-          <div className="flex flex-wrap gap-3">
-            <Link
-              href="/"
-              className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-900"
-            >
-              Dashboard
-            </Link>
-
-            <button
-              type="button"
-              onClick={importOldLocalAccounts}
-              disabled={importing}
-              className="rounded-xl border border-blue-900 px-4 py-2 text-sm text-blue-300 hover:bg-blue-950 disabled:opacity-60"
-            >
-              {importing ? "Importing..." : "Import Old Local Accounts"}
-            </button>
-
-            <button
-              type="button"
-              onClick={logout}
-              className="rounded-xl border border-red-900 px-4 py-2 text-sm text-red-300 hover:bg-red-950"
-            >
-              Logout
-            </button>
+          <div className="grid gap-4 md:grid-cols-3">
+            <SummaryCard title="Assets" value={formatCurrency(totals.assets)} />
+            <SummaryCard
+              title="Liabilities"
+              value={formatCurrency(totals.liabilities)}
+            />
+            <SummaryCard
+              title="Net Worth"
+              value={formatCurrency(totals.netWorth)}
+            />
           </div>
-        </div>
 
-        <div className="grid gap-4 md:grid-cols-3">
-          <SummaryCard title="Assets" value={formatCurrency(totals.assets)} />
-          <SummaryCard
-            title="Liabilities"
-            value={formatCurrency(totals.liabilities)}
-          />
-          <SummaryCard
-            title="Net Worth"
-            value={formatCurrency(totals.netWorth)}
-          />
-        </div>
+          <div className="mt-8 grid gap-6 xl:grid-cols-[420px_1fr]">
+            <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+              <h2 className="text-lg font-medium">Add Manual Account</h2>
+              <p className="mt-1 text-sm text-slate-400">
+                These accounts are stored in Supabase.
+              </p>
 
-        <div className="mt-8 grid gap-6 lg:grid-cols-[420px_1fr]">
-          <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-            <h2 className="text-lg font-medium">Add Manual Account</h2>
-            <p className="mt-1 text-sm text-slate-400">
-              These accounts are stored in Supabase.
-            </p>
+              <form onSubmit={addAccount} className="mt-5 space-y-4">
+                <div>
+                  <label className="text-sm text-slate-300">Account Name</label>
+                  <input
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
+                    placeholder="Example: Chase Checking"
+                    className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                  />
+                </div>
 
-            <form onSubmit={addAccount} className="mt-5 space-y-4">
-              <div>
-                <label className="text-sm text-slate-300">Account Name</label>
-                <input
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                  placeholder="Example: Chase Checking"
-                  className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
-                />
-              </div>
+                <div>
+                  <label className="text-sm text-slate-300">Institution</label>
+                  <input
+                    value={institutionName}
+                    onChange={(event) =>
+                      setInstitutionName(event.target.value)
+                    }
+                    placeholder="Example: Chase, Amex, Robinhood"
+                    className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                  />
+                </div>
 
-              <div>
-                <label className="text-sm text-slate-300">Institution</label>
-                <input
-                  value={institutionName}
-                  onChange={(event) => setInstitutionName(event.target.value)}
-                  placeholder="Example: Chase, Amex, Robinhood"
-                  className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
-                />
-              </div>
+                <div>
+                  <label className="text-sm text-slate-300">Account Type</label>
+                  <select
+                    value={accountType}
+                    onChange={(event) =>
+                      setAccountType(event.target.value as AccountType)
+                    }
+                    className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                  >
+                    {ACCOUNT_TYPE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-              <div>
-                <label className="text-sm text-slate-300">Account Type</label>
-                <select
-                  value={accountType}
-                  onChange={(event) =>
-                    setAccountType(event.target.value as AccountType)
-                  }
-                  className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                <div>
+                  <label className="text-sm text-slate-300">Balance</label>
+                  <input
+                    value={balance}
+                    onChange={(event) => setBalance(event.target.value)}
+                    placeholder="Example: 5000"
+                    type="number"
+                    step="0.01"
+                    className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                  />
+                  <p className="mt-1 text-xs text-slate-500">
+                    For credit cards/loans, enter the balance as a positive
+                    number.
+                  </p>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="w-full rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium hover:bg-blue-500 disabled:opacity-60"
                 >
-                  {ACCOUNT_TYPE_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                  {saving ? "Saving..." : "Add Account"}
+                </button>
+              </form>
 
-              <div>
-                <label className="text-sm text-slate-300">Balance</label>
-                <input
-                  value={balance}
-                  onChange={(event) => setBalance(event.target.value)}
-                  placeholder="Example: 5000"
-                  type="number"
-                  step="0.01"
-                  className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
-                />
+              <div className="mt-5 rounded-xl border border-slate-800 bg-slate-950 p-4">
+                <p className="text-sm font-medium text-slate-200">
+                  Migration utility
+                </p>
                 <p className="mt-1 text-xs text-slate-500">
-                  For credit cards/loans, enter the balance as a positive number.
+                  Use only if you still need to import old browser-stored
+                  accounts.
+                </p>
+
+                <button
+                  type="button"
+                  onClick={importOldLocalAccounts}
+                  disabled={importing}
+                  className="mt-3 w-full rounded-xl border border-blue-900 px-4 py-2 text-sm text-blue-300 hover:bg-blue-950 disabled:opacity-60"
+                >
+                  {importing ? "Importing..." : "Import Old Local Accounts"}
+                </button>
+              </div>
+            </section>
+
+            <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+              <div className="mb-4">
+                <h2 className="text-lg font-medium">Account List</h2>
+                <p className="text-sm text-slate-400">
+                  {accounts.length} account
+                  {accounts.length === 1 ? "" : "s"} added
                 </p>
               </div>
 
-              <button
-                type="submit"
-                disabled={saving}
-                className="w-full rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium hover:bg-blue-500 disabled:opacity-60"
-              >
-                {saving ? "Saving..." : "Add Account"}
-              </button>
-            </form>
-          </section>
-
-          <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-            <div className="mb-4">
-              <h2 className="text-lg font-medium">Account List</h2>
-              <p className="text-sm text-slate-400">
-                {accounts.length} account{accounts.length === 1 ? "" : "s"} added
-              </p>
-            </div>
-
-            <div className="overflow-x-auto rounded-xl border border-slate-800">
-              <table className="w-full min-w-[760px] text-left text-sm">
-                <thead className="bg-slate-950 text-slate-400">
-                  <tr>
-                    <th className="px-4 py-3">Account</th>
-                    <th className="px-4 py-3">Type</th>
-                    <th className="px-4 py-3 text-right">Balance</th>
-                    <th className="px-4 py-3 text-right">Actions</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {accounts.map((account) => (
-                    <tr
-                      key={account.id}
-                      className="border-t border-slate-800 text-slate-200"
-                    >
-                      <td className="px-4 py-3">
-                        <div>
-                          <p className="font-medium">{account.name}</p>
-                          <p className="text-xs text-slate-500">
-                            {account.institution_name || "Manual"}
-                            {!account.is_active ? " • inactive" : ""}
-                          </p>
-                        </div>
-                      </td>
-
-                      <td className="px-4 py-3 capitalize text-slate-300">
-                        {account.account_type.replaceAll("_", " ")}
-                      </td>
-
-                      <td className="px-4 py-3 text-right font-medium">
-                        {formatCurrency(Number(account.balance))}
-                      </td>
-
-                      <td className="px-4 py-3 text-right">
-                        <div className="flex justify-end gap-2">
-                          <button
-                            type="button"
-                            onClick={() => toggleAccountStatus(account)}
-                            className="rounded-lg border border-slate-700 px-3 py-1 text-xs text-slate-300 hover:bg-slate-800"
-                          >
-                            {account.is_active ? "Archive" : "Restore"}
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => deleteAccount(account.id)}
-                            className="rounded-lg border border-red-900 px-3 py-1 text-xs text-red-300 hover:bg-red-950"
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-
-                  {accounts.length === 0 && (
+              <div className="overflow-x-auto rounded-xl border border-slate-800">
+                <table className="w-full min-w-[900px] text-left text-sm">
+                  <thead className="bg-slate-950 text-slate-400">
                     <tr>
-                      <td
-                        colSpan={4}
-                        className="px-4 py-10 text-center text-slate-500"
-                      >
-                        No Supabase accounts yet. Add your first manual account
-                        or import old local accounts.
-                      </td>
+                      <th className="px-4 py-3">Account</th>
+                      <th className="px-4 py-3">Type</th>
+                      <th className="px-4 py-3 text-right">Balance</th>
+                      <th className="px-4 py-3 text-right">Actions</th>
                     </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </section>
+                  </thead>
+
+                  <tbody>
+                    {accounts.map((account) => {
+                      const isEditing = editingId === account.id;
+                      const isBusy =
+                        updatingId === account.id || deletingId === account.id;
+
+                      return (
+                        <tr
+                          key={account.id}
+                          className="border-t border-slate-800 text-slate-200"
+                        >
+                          <td className="px-4 py-3 align-top">
+                            {isEditing ? (
+                              <div className="space-y-2">
+                                <input
+                                  value={editName}
+                                  onChange={(event) =>
+                                    setEditName(event.target.value)
+                                  }
+                                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                                />
+                                <input
+                                  value={editInstitutionName}
+                                  onChange={(event) =>
+                                    setEditInstitutionName(event.target.value)
+                                  }
+                                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                                />
+                              </div>
+                            ) : (
+                              <div>
+                                <p className="font-medium">{account.name}</p>
+                                <p className="text-xs text-slate-500">
+                                  {account.institution_name || "Manual"}
+                                  {!account.is_active ? " • inactive" : ""}
+                                </p>
+                              </div>
+                            )}
+                          </td>
+
+                          <td className="px-4 py-3 align-top capitalize text-slate-300">
+                            {isEditing ? (
+                              <select
+                                value={editAccountType}
+                                onChange={(event) =>
+                                  setEditAccountType(
+                                    event.target.value as AccountType
+                                  )
+                                }
+                                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                              >
+                                {ACCOUNT_TYPE_OPTIONS.map((option) => (
+                                  <option
+                                    key={option.value}
+                                    value={option.value}
+                                  >
+                                    {option.label}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : (
+                              account.account_type.replaceAll("_", " ")
+                            )}
+                          </td>
+
+                          <td className="px-4 py-3 text-right align-top font-medium">
+                            {isEditing ? (
+                              <input
+                                value={editBalance}
+                                onChange={(event) =>
+                                  setEditBalance(event.target.value)
+                                }
+                                type="number"
+                                step="0.01"
+                                className="w-32 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-right text-sm outline-none focus:border-blue-500"
+                              />
+                            ) : (
+                              formatCurrency(Number(account.balance))
+                            )}
+                          </td>
+
+                          <td className="px-4 py-3 text-right align-top">
+                            {isEditing ? (
+                              <div className="flex justify-end gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => saveAccountEdit(account.id)}
+                                  disabled={isBusy}
+                                  className="rounded-lg bg-blue-600 px-3 py-1 text-xs font-medium text-white hover:bg-blue-500 disabled:opacity-60"
+                                >
+                                  {updatingId === account.id
+                                    ? "Saving..."
+                                    : "Save"}
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={cancelEditing}
+                                  disabled={isBusy}
+                                  className="rounded-lg border border-slate-700 px-3 py-1 text-xs text-slate-300 hover:bg-slate-800 disabled:opacity-60"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="flex justify-end gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => startEditing(account)}
+                                  disabled={isBusy}
+                                  className="rounded-lg border border-blue-900 px-3 py-1 text-xs text-blue-300 hover:bg-blue-950 disabled:opacity-60"
+                                >
+                                  Edit
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => toggleAccountStatus(account)}
+                                  disabled={isBusy}
+                                  className="rounded-lg border border-slate-700 px-3 py-1 text-xs text-slate-300 hover:bg-slate-800 disabled:opacity-60"
+                                >
+                                  {updatingId === account.id
+                                    ? "Updating..."
+                                    : account.is_active
+                                    ? "Archive"
+                                    : "Restore"}
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => deleteAccount(account)}
+                                  disabled={isBusy}
+                                  className="rounded-lg border border-red-900 px-3 py-1 text-xs text-red-300 hover:bg-red-950 disabled:opacity-60"
+                                >
+                                  {deletingId === account.id
+                                    ? "Deleting..."
+                                    : "Delete"}
+                                </button>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+
+                    {accounts.length === 0 && (
+                      <tr>
+                        <td
+                          colSpan={4}
+                          className="px-4 py-10 text-center text-slate-500"
+                        >
+                          No Supabase accounts yet. Add your first manual
+                          account or import old local accounts.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </div>
         </div>
       </div>
     </main>
