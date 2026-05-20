@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import AppNav from "@/components/AppNav";
+import { useToast } from "@/components/ToastProvider";
 
 type AccountType =
   | "checking"
@@ -82,6 +83,8 @@ const SAMPLE_CSV = `date,name,merchant,amount,type,category
 2026-05-04,Rent,Apartment,1400,expense,Rent/Mortgage`;
 
 export default function TransactionsPage() {
+  const { showToast } = useToast();
+
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [userId, setUserId] = useState("");
@@ -141,7 +144,11 @@ export default function TransactionsPage() {
 
       if (accountError) {
         console.error("Failed to load accounts:", accountError);
-        alert(accountError.message);
+        showToast({
+          type: "error",
+          title: "Failed to load accounts",
+          message: accountError.message,
+        });
         setHasLoaded(true);
         return;
       }
@@ -162,7 +169,11 @@ export default function TransactionsPage() {
 
       if (transactionError) {
         console.error("Failed to load transactions:", transactionError);
-        alert(transactionError.message);
+        showToast({
+          type: "error",
+          title: "Failed to load transactions",
+          message: transactionError.message,
+        });
       } else {
         setTransactions((transactionData || []) as Transaction[]);
       }
@@ -171,7 +182,7 @@ export default function TransactionsPage() {
     }
 
     initialize();
-  }, []);
+  }, [showToast]);
 
   const currentMonth = new Date().toISOString().slice(0, 7);
 
@@ -213,24 +224,40 @@ export default function TransactionsPage() {
     event.preventDefault();
 
     if (!userId) {
-      alert("You must be logged in.");
+      showToast({
+        type: "error",
+        title: "You must be logged in",
+        message: "Please log in before adding a transaction.",
+      });
       return;
     }
 
     if (!accountId) {
-      alert("Please select an account.");
+      showToast({
+        type: "warning",
+        title: "Account required",
+        message: "Please select an account first.",
+      });
       return;
     }
 
     if (!name.trim()) {
-      alert("Please enter a transaction name.");
+      showToast({
+        type: "warning",
+        title: "Transaction name required",
+        message: "Please enter a transaction name.",
+      });
       return;
     }
 
     const parsedAmount = Number(amount);
 
     if (Number.isNaN(parsedAmount) || parsedAmount <= 0) {
-      alert("Please enter a valid positive amount.");
+      showToast({
+        type: "warning",
+        title: "Invalid amount",
+        message: "Please enter a valid positive amount.",
+      });
       return;
     }
 
@@ -260,7 +287,11 @@ export default function TransactionsPage() {
 
     if (error) {
       console.error("Failed to add transaction:", error);
-      alert(error.message);
+      showToast({
+        type: "error",
+        title: "Failed to add transaction",
+        message: error.message,
+      });
       return;
     }
 
@@ -272,6 +303,12 @@ export default function TransactionsPage() {
     setTransactionType("expense");
     setCategory("Other");
     setNotes("");
+
+    showToast({
+      type: "success",
+      title: "Transaction added",
+      message: `${payload.name} was added successfully.`,
+    });
   }
 
   function startEditing(transaction: Transaction) {
@@ -300,19 +337,31 @@ export default function TransactionsPage() {
 
   async function saveTransactionEdit(transactionId: string) {
     if (!editAccountId) {
-      alert("Please select an account.");
+      showToast({
+        type: "warning",
+        title: "Account required",
+        message: "Please select an account.",
+      });
       return;
     }
 
     if (!editName.trim()) {
-      alert("Please enter a transaction name.");
+      showToast({
+        type: "warning",
+        title: "Transaction name required",
+        message: "Please enter a transaction name.",
+      });
       return;
     }
 
     const parsedAmount = Number(editAmount);
 
     if (Number.isNaN(parsedAmount) || parsedAmount <= 0) {
-      alert("Please enter a valid positive amount.");
+      showToast({
+        type: "warning",
+        title: "Invalid amount",
+        message: "Please enter a valid positive amount.",
+      });
       return;
     }
 
@@ -338,7 +387,11 @@ export default function TransactionsPage() {
     setUpdatingId("");
 
     if (error) {
-      alert(error.message);
+      showToast({
+        type: "error",
+        title: "Failed to update transaction",
+        message: error.message,
+      });
       return;
     }
 
@@ -349,6 +402,12 @@ export default function TransactionsPage() {
     );
 
     cancelEditing();
+
+    showToast({
+      type: "success",
+      title: "Transaction updated",
+      message: `${editName.trim()} was saved successfully.`,
+    });
   }
 
   async function importCsv() {
@@ -356,27 +415,49 @@ export default function TransactionsPage() {
 
     if (!userId) {
       setCsvMessage("You must be logged in.");
+      showToast({
+        type: "error",
+        title: "You must be logged in",
+        message: "Please log in before importing CSV data.",
+      });
       return;
     }
 
     if (!accountId) {
       setCsvMessage("Please add/select an account before importing.");
+      showToast({
+        type: "warning",
+        title: "Account required",
+        message: "Please add or select an account before importing.",
+      });
       return;
     }
 
     if (!csvText.trim()) {
       setCsvMessage("Paste CSV data first.");
+      showToast({
+        type: "warning",
+        title: "CSV data required",
+        message: "Paste CSV data before importing.",
+      });
       return;
     }
 
     const result = parseCsvTransactions(csvText, userId, accountId);
 
     if (result.transactions.length === 0) {
-      setCsvMessage(
-        `No valid transactions found. ${
-          result.errors.length > 0 ? result.errors[0] : ""
-        }`
-      );
+      const message =
+        result.errors.length > 0
+          ? result.errors[0]
+          : "No valid transactions found.";
+
+      setCsvMessage(`No valid transactions found. ${message}`);
+
+      showToast({
+        type: "warning",
+        title: "No valid transactions found",
+        message,
+      });
       return;
     }
 
@@ -392,6 +473,11 @@ export default function TransactionsPage() {
     if (error) {
       console.error("CSV import failed:", error);
       setCsvMessage(error.message);
+      showToast({
+        type: "error",
+        title: "CSV import failed",
+        message: error.message,
+      });
       return;
     }
 
@@ -400,15 +486,20 @@ export default function TransactionsPage() {
       ...current,
     ]);
 
-    setCsvMessage(
-      `Imported ${data?.length || 0} transaction${
-        data?.length === 1 ? "" : "s"
-      }. ${
-        result.errors.length > 0 ? `${result.errors.length} row(s) skipped.` : ""
-      }`
-    );
+    const message = `Imported ${data?.length || 0} transaction${
+      data?.length === 1 ? "" : "s"
+    }. ${
+      result.errors.length > 0 ? `${result.errors.length} row(s) skipped.` : ""
+    }`;
 
+    setCsvMessage(message);
     setCsvText("");
+
+    showToast({
+      type: "success",
+      title: "CSV import complete",
+      message,
+    });
   }
 
   async function deleteTransaction(transaction: Transaction) {
@@ -430,13 +521,23 @@ export default function TransactionsPage() {
     setDeletingId("");
 
     if (error) {
-      alert(error.message);
+      showToast({
+        type: "error",
+        title: "Failed to delete transaction",
+        message: error.message,
+      });
       return;
     }
 
     setTransactions((current) =>
       current.filter((item) => item.id !== transaction.id)
     );
+
+    showToast({
+      type: "success",
+      title: "Transaction deleted",
+      message: `${transaction.name} was removed.`,
+    });
   }
 
   function getAccountName(id: string) {
@@ -464,16 +565,11 @@ export default function TransactionsPage() {
       <div className="min-w-0 flex-1">
         <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
           <div className="mb-8">
-            <p className="text-sm text-slate-400">WealthOS MVP</p>
+            <p className="text-sm text-slate-400">WealthOS</p>
             <h1 className="mt-2 text-3xl font-semibold">Transactions</h1>
             <p className="mt-1 text-sm text-slate-500">
-              Add, edit, import, and manage Supabase-backed transactions.
+              Add, edit, import, and manage your transactions.
             </p>
-            {userEmail && (
-              <p className="mt-1 text-xs text-slate-600">
-                Logged in as {userEmail}
-              </p>
-            )}
           </div>
 
           <div className="grid gap-4 md:grid-cols-4">
