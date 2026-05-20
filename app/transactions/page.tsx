@@ -5,6 +5,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import AppNav from "@/components/AppNav";
 import { useToast } from "@/components/ToastProvider";
+import { useConfirm } from "@/components/ConfirmProvider";
 
 type AccountType =
   | "checking"
@@ -84,6 +85,7 @@ const SAMPLE_CSV = `date,name,merchant,amount,type,category
 
 export default function TransactionsPage() {
   const { showToast } = useToast();
+  const { confirm } = useConfirm();
 
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -503,11 +505,15 @@ export default function TransactionsPage() {
   }
 
   async function deleteTransaction(transaction: Transaction) {
-    const confirmed = confirm(
-      `Delete "${transaction.name}" for ${formatCurrency(
+    const confirmed = await confirm({
+      title: `Delete ${transaction.name}?`,
+      message: `Amount: ${formatCurrency(
         Number(transaction.amount)
-      )}?\n\nThis will permanently remove the transaction from Supabase. This action cannot be undone.`
-    );
+      )}\n\nThis will permanently remove the transaction from Supabase.\n\nThis action cannot be undone.`,
+      confirmLabel: "Delete Transaction",
+      cancelLabel: "Cancel",
+      variant: "danger",
+    });
 
     if (!confirmed) return;
 

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import AppNav from "@/components/AppNav";
 import { useToast } from "@/components/ToastProvider";
+import { useConfirm } from "@/components/ConfirmProvider";
 
 type GoalType =
   | "emergency_fund"
@@ -38,6 +39,7 @@ const GOAL_TYPE_OPTIONS: { label: string; value: GoalType }[] = [
 
 export default function GoalsPage() {
   const { showToast } = useToast();
+  const { confirm } = useConfirm();
 
   const [goals, setGoals] = useState<Goal[]>([]);
   const [userId, setUserId] = useState("");
@@ -333,13 +335,17 @@ export default function GoalsPage() {
   }
 
   async function deleteGoal(goal: Goal) {
-    const confirmed = confirm(
-      `Delete goal "${goal.name}"?\n\nTarget: ${formatCurrency(
+    const confirmed = await confirm({
+      title: `Delete ${goal.name}?`,
+      message: `Target: ${formatCurrency(
         Number(goal.target_amount)
       )}\nCurrent: ${formatCurrency(
         Number(goal.current_amount)
-      )}\n\nThis will permanently remove the goal from Supabase. This action cannot be undone.`
-    );
+      )}\n\nThis will permanently remove the goal from Supabase.\n\nThis action cannot be undone.`,
+      confirmLabel: "Delete Goal",
+      cancelLabel: "Cancel",
+      variant: "danger",
+    });
 
     if (!confirmed) return;
 
