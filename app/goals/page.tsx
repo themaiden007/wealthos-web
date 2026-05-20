@@ -89,10 +89,10 @@ export default function GoalsPage() {
 
       if (error) {
         showToast({
-        type: "error",
-        title: "Something went wrong",
-        message: error.message,
-      });
+          type: "error",
+          title: "Failed to load goals",
+          message: error.message,
+        });
       } else {
         setGoals((data || []) as Goal[]);
       }
@@ -101,7 +101,7 @@ export default function GoalsPage() {
     }
 
     initialize();
-  }, []);
+  }, [showToast]);
 
   const summary = useMemo(() => {
     const totalTarget = goals.reduce(
@@ -142,7 +142,7 @@ export default function GoalsPage() {
       showToast({
         type: "error",
         title: "You must be logged in",
-        message: "Please log in before continuing.",
+        message: "Please log in before adding a goal.",
       });
       return;
     }
@@ -215,7 +215,7 @@ export default function GoalsPage() {
     if (error) {
       showToast({
         type: "error",
-        title: "Something went wrong",
+        title: "Failed to add goal",
         message: error.message,
       });
       return;
@@ -230,6 +230,12 @@ export default function GoalsPage() {
     setTargetDate("");
     setMonthlyContribution("");
     setNotes("");
+
+    showToast({
+      type: "success",
+      title: "Goal added",
+      message: `${payload.name} was added successfully.`,
+    });
   }
 
   function startEditing(goal: Goal) {
@@ -321,7 +327,7 @@ export default function GoalsPage() {
     if (error) {
       showToast({
         type: "error",
-        title: "Something went wrong",
+        title: "Failed to update goal",
         message: error.message,
       });
       return;
@@ -332,6 +338,12 @@ export default function GoalsPage() {
     );
 
     cancelEditing();
+
+    showToast({
+      type: "success",
+      title: "Goal updated",
+      message: `${editName.trim()} was saved successfully.`,
+    });
   }
 
   async function deleteGoal(goal: Goal) {
@@ -358,19 +370,32 @@ export default function GoalsPage() {
     if (error) {
       showToast({
         type: "error",
-        title: "Something went wrong",
+        title: "Failed to delete goal",
         message: error.message,
       });
       return;
     }
 
     setGoals((current) => current.filter((item) => item.id !== goal.id));
+
+    showToast({
+      type: "success",
+      title: "Goal deleted",
+      message: `${goal.name} was removed.`,
+    });
   }
 
   async function updateGoalProgress(goal: Goal, value: string) {
     const parsed = Number(value);
 
-    if (Number.isNaN(parsed) || parsed < 0) return;
+    if (Number.isNaN(parsed) || parsed < 0) {
+      showToast({
+        type: "warning",
+        title: "Invalid progress amount",
+        message: "Please enter a valid progress amount.",
+      });
+      return;
+    }
 
     const safeAmount = Math.min(parsed, Number(goal.target_amount || 0));
 
@@ -400,14 +425,21 @@ export default function GoalsPage() {
     if (error) {
       showToast({
         type: "error",
-        title: "Something went wrong",
+        title: "Failed to update progress",
         message: error.message,
       });
     }
   }
 
   async function addContribution(goal: Goal, amount: number) {
-    if (amount <= 0) return;
+    if (amount <= 0) {
+      showToast({
+        type: "warning",
+        title: "Contribution unavailable",
+        message: "Set a monthly contribution greater than $0 first.",
+      });
+      return;
+    }
 
     const updatedAmount = Math.min(
       Number(goal.current_amount || 0) + amount,
@@ -440,10 +472,17 @@ export default function GoalsPage() {
     if (error) {
       showToast({
         type: "error",
-        title: "Something went wrong",
+        title: "Failed to add contribution",
         message: error.message,
       });
+      return;
     }
+
+    showToast({
+      type: "success",
+      title: "Contribution added",
+      message: `${formatCurrency(amount)} was added to ${goal.name}.`,
+    });
   }
 
   if (!hasLoaded) {
@@ -467,16 +506,11 @@ export default function GoalsPage() {
       <div className="min-w-0 flex-1">
         <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
           <div className="mb-8">
-            <p className="text-sm text-slate-400">WealthOS MVP</p>
+            <p className="text-sm text-slate-400">WealthOS</p>
             <h1 className="mt-2 text-3xl font-semibold">Goals</h1>
             <p className="mt-1 text-sm text-slate-500">
-              Add, edit, track, and manage Supabase-backed goals.
+              Add, edit, track, and manage your financial goals.
             </p>
-            {userEmail && (
-              <p className="mt-1 text-xs text-slate-600">
-                Logged in as {userEmail}
-              </p>
-            )}
           </div>
 
           <div className="grid gap-4 md:grid-cols-5">
@@ -506,7 +540,7 @@ export default function GoalsPage() {
             <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
               <h2 className="text-lg font-medium">Add Goal</h2>
               <p className="mt-1 text-sm text-slate-400">
-                Goals are saved to Supabase.
+                Track emergency funds, debt payoff, investments, and purchases.
               </p>
 
               <form onSubmit={addGoal} noValidate className="mt-5 space-y-4">
@@ -911,6 +945,11 @@ export default function GoalsPage() {
                                 step="0.01"
                                 className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-blue-500"
                               />
+                              {updatingId === goal.id && (
+                                <p className="mt-1 text-xs text-blue-300">
+                                  Saving...
+                                </p>
+                              )}
                             </div>
 
                             <div className="mt-4 grid grid-cols-2 gap-2">
