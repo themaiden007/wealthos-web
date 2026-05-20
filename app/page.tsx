@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import AppNav from "@/components/AppNav";
 
 type AccountType =
   | "checking"
@@ -49,8 +50,12 @@ type Transaction = {
 };
 
 type BudgetItem = {
+  id: string;
+  user_id: string;
   category: string;
-  plannedAmount: number;
+  planned_amount: number;
+  created_at: string;
+  updated_at: string;
 };
 
 type GoalType =
@@ -63,18 +68,17 @@ type GoalType =
 
 type Goal = {
   id: string;
+  user_id: string;
   name: string;
-  goalType: GoalType;
-  targetAmount: number;
-  currentAmount: number;
-  targetDate: string;
-  monthlyContribution: number;
-  notes: string;
-  createdAt: string;
+  goal_type: GoalType;
+  target_amount: number;
+  current_amount: number;
+  target_date: string | null;
+  monthly_contribution: number;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
 };
-
-const BUDGET_STORAGE_KEY = "wealthos_budget_v1";
-const GOALS_STORAGE_KEY = "wealthos_goals_v1";
 
 const ASSET_TYPES: AccountType[] = [
   "checking",
@@ -114,53 +118,62 @@ export default function HomePage() {
 
         setUserEmail(user.email || "");
 
-        const { data: accountData, error: accountError } = await supabase
-          .from("accounts")
-          .select("*")
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: false });
+        const [
+          accountsResponse,
+          transactionsResponse,
+          budgetResponse,
+          goalsResponse,
+        ] = await Promise.all([
+          supabase
+            .from("accounts")
+            .select("*")
+            .eq("user_id", user.id)
+            .order("created_at", { ascending: false }),
 
-        if (accountError) {
-          console.error("Failed to load accounts:", accountError);
-          alert(accountError.message);
-          return;
-        }
-
-        const { data: transactionData, error: transactionError } =
-          await supabase
+          supabase
             .from("transactions")
             .select("*")
             .eq("user_id", user.id)
             .order("date", { ascending: false })
-            .order("created_at", { ascending: false });
+            .order("created_at", { ascending: false }),
 
-        if (transactionError) {
-          console.error("Failed to load transactions:", transactionError);
-          alert(transactionError.message);
+          supabase
+            .from("budget_items")
+            .select("*")
+            .eq("user_id", user.id)
+            .order("category", { ascending: true }),
+
+          supabase
+            .from("goals")
+            .select("*")
+            .eq("user_id", user.id)
+            .order("created_at", { ascending: false }),
+        ]);
+
+        if (accountsResponse.error) {
+          alert(accountsResponse.error.message);
           return;
         }
 
-        setAccounts((accountData || []) as Account[]);
-        setTransactions((transactionData || []) as Transaction[]);
-
-        const savedBudget = window.localStorage.getItem(BUDGET_STORAGE_KEY);
-        const savedGoals = window.localStorage.getItem(GOALS_STORAGE_KEY);
-
-        if (savedBudget) {
-          const parsedBudget = JSON.parse(savedBudget);
-
-          if (Array.isArray(parsedBudget)) {
-            setBudgetItems(parsedBudget);
-          }
+        if (transactionsResponse.error) {
+          alert(transactionsResponse.error.message);
+          return;
         }
 
-        if (savedGoals) {
-          const parsedGoals = JSON.parse(savedGoals);
-
-          if (Array.isArray(parsedGoals)) {
-            setGoals(parsedGoals);
-          }
+        if (budgetResponse.error) {
+          alert(budgetResponse.error.message);
+          return;
         }
+
+        if (goalsResponse.error) {
+          alert(goalsResponse.error.message);
+          return;
+        }
+
+        setAccounts((accountsResponse.data || []) as Account[]);
+        setTransactions((transactionsResponse.data || []) as Transaction[]);
+        setBudgetItems((budgetResponse.data || []) as BudgetItem[]);
+        setGoals((goalsResponse.data || []) as Goal[]);
       } catch (error) {
         console.error("Failed to load dashboard data:", error);
       } finally {
@@ -198,11 +211,17 @@ export default function HomePage() {
 
     const income = monthTransactions
       .filter((transaction) => transaction.transaction_type === "income")
-      .reduce((sum, transaction) => sum + Math.abs(Number(transaction.amount)), 0);
+      .reduce(
+        (sum, transaction) => sum + Math.abs(Number(transaction.amount)),
+        0
+      );
 
     const spending = monthTransactions
       .filter((transaction) => transaction.transaction_type === "expense")
-      .reduce((sum, transaction) => sum + Math.abs(Number(transaction.amount)), 0);
+      .reduce(
+        (sum, transaction) => sum + Math.abs(Number(transaction.amount)),
+        0
+      );
 
     return {
       income,
@@ -219,7 +238,7 @@ export default function HomePage() {
     );
 
     const totalPlanned = budgetItems.reduce(
-      (sum, item) => sum + Number(item.plannedAmount || 0),
+      (sum, item) => sum + Number(item.planned_amount || 0),
       0
     );
 
@@ -237,12 +256,12 @@ export default function HomePage() {
 
   const goalSummary = useMemo(() => {
     const totalTarget = goals.reduce(
-      (sum, goal) => sum + Number(goal.targetAmount || 0),
+      (sum, goal) => sum + Number(goal.target_amount || 0),
       0
     );
 
     const totalCurrent = goals.reduce(
-      (sum, goal) => sum + Number(goal.currentAmount || 0),
+      (sum, goal) => sum + Number(goal.current_amount || 0),
       0
     );
 
@@ -250,11 +269,11 @@ export default function HomePage() {
       totalTarget > 0 ? Math.min((totalCurrent / totalTarget) * 100, 100) : 0;
 
     const activeGoals = goals.filter(
-      (goal) => Number(goal.currentAmount) < Number(goal.targetAmount)
+      (goal) => Number(goal.current_amount) < Number(goal.target_amount)
     ).length;
 
     const completedGoals = goals.filter(
-      (goal) => Number(goal.currentAmount) >= Number(goal.targetAmount)
+      (goal) => Number(goal.current_amount) >= Number(goal.target_amount)
     ).length;
 
     return {
@@ -271,24 +290,27 @@ export default function HomePage() {
     return accounts.find((account) => account.id === id)?.name || "Unknown";
   }
 
-  async function logout() {
-    await supabase.auth.signOut();
-    window.location.href = "/login";
-  }
-
   if (!hasLoaded) {
     return (
-      <main className="min-h-screen bg-slate-950 p-8 text-white">
-        Loading dashboard...
+      <main className="min-h-screen bg-slate-950 text-white md:flex">
+        <AppNav userEmail={userEmail} />
+
+        <div className="min-w-0 flex-1">
+          <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+            Loading dashboard...
+          </div>
+        </div>
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen bg-slate-950 text-white">
-      <div className="mx-auto max-w-7xl px-6 py-8">
-        <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
+    <main className="min-h-screen bg-slate-950 text-white md:flex">
+      <AppNav userEmail={userEmail} />
+
+      <div className="min-w-0 flex-1">
+        <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+          <div className="mb-8">
             <p className="text-sm text-slate-400">WealthOS MVP</p>
             <h1 className="mt-2 text-3xl font-semibold">
               Financial Dashboard
@@ -304,323 +326,278 @@ export default function HomePage() {
             )}
           </div>
 
-          <div className="flex flex-wrap gap-3">
-            <Link
-              href="/accounts"
-              className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-900"
-            >
-              Manage Accounts
-            </Link>
+          <div className="grid gap-4 md:grid-cols-3">
+            <DashboardCard
+              title="Net Worth"
+              value={formatCurrency(accountTotals.netWorth)}
+              subtitle="Assets minus liabilities"
+            />
 
-            <Link
-              href="/transactions"
-              className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium hover:bg-blue-500"
-            >
-              Add Transactions
-            </Link>
+            <DashboardCard
+              title="Assets"
+              value={formatCurrency(accountTotals.assets)}
+              subtitle="Cash, investments, property"
+            />
 
-            <Link
-              href="/budgets"
-              className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-900"
-            >
-              Budget
-            </Link>
-
-            <Link
-              href="/goals"
-              className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-900"
-            >
-              Goals
-            </Link>
-
-            <Link
-              href="/insights"
-              className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-900"
-            >
-              Insights
-            </Link>
-
-            <button
-              type="button"
-              onClick={logout}
-              className="rounded-xl border border-red-900 px-4 py-2 text-sm text-red-300 hover:bg-red-950"
-            >
-              Logout
-            </button>
+            <DashboardCard
+              title="Liabilities"
+              value={formatCurrency(accountTotals.liabilities)}
+              subtitle="Credit cards, loans, debt"
+            />
           </div>
-        </div>
 
-        <div className="grid gap-4 md:grid-cols-3">
-          <DashboardCard
-            title="Net Worth"
-            value={formatCurrency(accountTotals.netWorth)}
-            subtitle="Assets minus liabilities"
-          />
+          <div className="mt-4 grid gap-4 md:grid-cols-3">
+            <DashboardCard
+              title="Monthly Income"
+              value={formatCurrency(monthlySummary.income)}
+              subtitle={`Income in ${currentMonth}`}
+            />
 
-          <DashboardCard
-            title="Assets"
-            value={formatCurrency(accountTotals.assets)}
-            subtitle="Cash, investments, property"
-          />
+            <DashboardCard
+              title="Monthly Spending"
+              value={formatCurrency(monthlySummary.spending)}
+              subtitle={`Expenses in ${currentMonth}`}
+            />
 
-          <DashboardCard
-            title="Liabilities"
-            value={formatCurrency(accountTotals.liabilities)}
-            subtitle="Credit cards, loans, debt"
-          />
-        </div>
+            <DashboardCard
+              title="Monthly Cash Flow"
+              value={formatCurrency(monthlySummary.cashFlow)}
+              subtitle="Income minus spending"
+            />
+          </div>
 
-        <div className="mt-4 grid gap-4 md:grid-cols-3">
-          <DashboardCard
-            title="Monthly Income"
-            value={formatCurrency(monthlySummary.income)}
-            subtitle={`Income in ${currentMonth}`}
-          />
+          <div className="mt-4 grid gap-4 md:grid-cols-3">
+            <DashboardCard
+              title="Budget Remaining"
+              value={formatCurrency(budgetSummary.remaining)}
+              subtitle={`${formatCurrency(
+                budgetSummary.totalActual
+              )} spent of ${formatCurrency(budgetSummary.totalPlanned)} planned`}
+            />
 
-          <DashboardCard
-            title="Monthly Spending"
-            value={formatCurrency(monthlySummary.spending)}
-            subtitle={`Expenses in ${currentMonth}`}
-          />
+            <DashboardCard
+              title="Goal Progress"
+              value={`${Math.round(goalSummary.progress)}%`}
+              subtitle={`${formatCurrency(
+                goalSummary.totalCurrent
+              )} saved of ${formatCurrency(goalSummary.totalTarget)}`}
+            />
 
-          <DashboardCard
-            title="Monthly Cash Flow"
-            value={formatCurrency(monthlySummary.cashFlow)}
-            subtitle="Income minus spending"
-          />
-        </div>
+            <DashboardCard
+              title="Active Goals"
+              value={String(goalSummary.activeGoals)}
+              subtitle={`${formatCurrency(goalSummary.remaining)} remaining`}
+            />
+          </div>
 
-        <div className="mt-4 grid gap-4 md:grid-cols-3">
-          <DashboardCard
-            title="Budget Remaining"
-            value={formatCurrency(budgetSummary.remaining)}
-            subtitle={`${formatCurrency(
-              budgetSummary.totalActual
-            )} spent of ${formatCurrency(budgetSummary.totalPlanned)} planned`}
-          />
-
-          <DashboardCard
-            title="Goal Progress"
-            value={`${Math.round(goalSummary.progress)}%`}
-            subtitle={`${formatCurrency(
-              goalSummary.totalCurrent
-            )} saved of ${formatCurrency(goalSummary.totalTarget)}`}
-          />
-
-          <DashboardCard
-            title="Active Goals"
-            value={String(goalSummary.activeGoals)}
-            subtitle={`${formatCurrency(goalSummary.remaining)} remaining`}
-          />
-        </div>
-
-        <div className="mt-8 grid gap-6 xl:grid-cols-[1fr_380px]">
-          <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-            <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <div>
-                <h2 className="text-lg font-medium">Recent Transactions</h2>
-                <p className="text-sm text-slate-400">
-                  Latest Supabase income, expenses, and transfers.
-                </p>
-              </div>
-
-              <Link
-                href="/transactions"
-                className="text-sm text-blue-400 hover:text-blue-300"
-              >
-                View all →
-              </Link>
-            </div>
-
-            <div className="overflow-x-auto rounded-xl border border-slate-800">
-              <table className="w-full min-w-[720px] text-left text-sm">
-                <thead className="bg-slate-950 text-slate-400">
-                  <tr>
-                    <th className="px-4 py-3">Transaction</th>
-                    <th className="px-4 py-3">Account</th>
-                    <th className="px-4 py-3">Category</th>
-                    <th className="px-4 py-3 text-right">Amount</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {transactions.slice(0, 8).map((transaction) => (
-                    <tr
-                      key={transaction.id}
-                      className="border-t border-slate-800 text-slate-200"
-                    >
-                      <td className="px-4 py-3">
-                        <div>
-                          <p className="font-medium">{transaction.name}</p>
-                          <p className="text-xs text-slate-500">
-                            {transaction.date} • {transaction.transaction_type}
-                          </p>
-                        </div>
-                      </td>
-
-                      <td className="px-4 py-3 text-slate-300">
-                        {getAccountName(transaction.account_id)}
-                      </td>
-
-                      <td className="px-4 py-3 text-slate-300">
-                        {transaction.category}
-                      </td>
-
-                      <td className="px-4 py-3 text-right font-medium">
-                        <span
-                          className={
-                            transaction.transaction_type === "income"
-                              ? "text-emerald-300"
-                              : transaction.transaction_type === "expense"
-                              ? "text-red-300"
-                              : "text-slate-300"
-                          }
-                        >
-                          {transaction.transaction_type === "income"
-                            ? "+"
-                            : transaction.transaction_type === "expense"
-                            ? "-"
-                            : ""}
-                          {formatCurrency(Number(transaction.amount))}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-
-                  {transactions.length === 0 && (
-                    <tr>
-                      <td
-                        colSpan={4}
-                        className="px-4 py-10 text-center text-slate-500"
-                      >
-                        No Supabase transactions yet. Add your first transaction
-                        or import CSV data.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </section>
-
-          <aside className="space-y-6">
+          <div className="mt-8 grid gap-6 xl:grid-cols-[1fr_380px]">
             <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-              <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-lg font-medium">Budget Snapshot</h2>
+              <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <h2 className="text-lg font-medium">Recent Transactions</h2>
+                  <p className="text-sm text-slate-400">
+                    Latest Supabase income, expenses, and transfers.
+                  </p>
+                </div>
+
                 <Link
-                  href="/budget"
+                  href="/transactions"
                   className="text-sm text-blue-400 hover:text-blue-300"
                 >
-                  Edit →
+                  View all →
                 </Link>
               </div>
 
-              <div className="space-y-4">
-                <MiniMetric
-                  label="Planned Budget"
-                  value={formatCurrency(budgetSummary.totalPlanned)}
-                />
-                <MiniMetric
-                  label="Actual Spending"
-                  value={formatCurrency(budgetSummary.totalActual)}
-                />
-                <MiniMetric
-                  label="Remaining"
-                  value={formatCurrency(budgetSummary.remaining)}
-                  valueClass={
-                    budgetSummary.remaining < 0
-                      ? "text-red-300"
-                      : "text-emerald-300"
-                  }
-                />
-              </div>
+              <div className="overflow-x-auto rounded-xl border border-slate-800">
+                <table className="w-full min-w-[720px] text-left text-sm">
+                  <thead className="bg-slate-950 text-slate-400">
+                    <tr>
+                      <th className="px-4 py-3">Transaction</th>
+                      <th className="px-4 py-3">Account</th>
+                      <th className="px-4 py-3">Category</th>
+                      <th className="px-4 py-3 text-right">Amount</th>
+                    </tr>
+                  </thead>
 
-              <div className="mt-5 rounded-xl border border-slate-800 bg-slate-950 p-4">
-                <p className="text-sm text-slate-300">
-                  {budgetSummary.totalPlanned === 0
-                    ? "Set planned budget amounts to activate budget tracking."
-                    : budgetSummary.remaining >= 0
-                    ? `You have ${formatCurrency(
-                        budgetSummary.remaining
-                      )} left in your monthly budget.`
-                    : `You are ${formatCurrency(
-                        Math.abs(budgetSummary.remaining)
-                      )} over your monthly budget.`}
-                </p>
+                  <tbody>
+                    {transactions.slice(0, 8).map((transaction) => (
+                      <tr
+                        key={transaction.id}
+                        className="border-t border-slate-800 text-slate-200"
+                      >
+                        <td className="px-4 py-3">
+                          <div>
+                            <p className="font-medium">{transaction.name}</p>
+                            <p className="text-xs text-slate-500">
+                              {transaction.date} •{" "}
+                              {transaction.transaction_type}
+                            </p>
+                          </div>
+                        </td>
+
+                        <td className="px-4 py-3 text-slate-300">
+                          {getAccountName(transaction.account_id)}
+                        </td>
+
+                        <td className="px-4 py-3 text-slate-300">
+                          {transaction.category}
+                        </td>
+
+                        <td className="px-4 py-3 text-right font-medium">
+                          <span
+                            className={
+                              transaction.transaction_type === "income"
+                                ? "text-emerald-300"
+                                : transaction.transaction_type === "expense"
+                                ? "text-red-300"
+                                : "text-slate-300"
+                            }
+                          >
+                            {transaction.transaction_type === "income"
+                              ? "+"
+                              : transaction.transaction_type === "expense"
+                              ? "-"
+                              : ""}
+                            {formatCurrency(Number(transaction.amount))}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+
+                    {transactions.length === 0 && (
+                      <tr>
+                        <td
+                          colSpan={4}
+                          className="px-4 py-10 text-center text-slate-500"
+                        >
+                          No Supabase transactions yet. Add your first
+                          transaction or import CSV data.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
             </section>
 
-            <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-              <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-lg font-medium">Goal Snapshot</h2>
-                <Link
-                  href="/goals"
-                  className="text-sm text-blue-400 hover:text-blue-300"
-                >
-                  Edit →
-                </Link>
-              </div>
+            <aside className="space-y-6">
+              <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+                <div className="mb-4 flex items-center justify-between">
+                  <h2 className="text-lg font-medium">Budget Snapshot</h2>
+                  <Link
+                    href="/budgets"
+                    className="text-sm text-blue-400 hover:text-blue-300"
+                  >
+                    Edit →
+                  </Link>
+                </div>
 
-              <div className="space-y-4">
-                <MiniMetric
-                  label="Total Target"
-                  value={formatCurrency(goalSummary.totalTarget)}
-                />
-                <MiniMetric
-                  label="Current Progress"
-                  value={formatCurrency(goalSummary.totalCurrent)}
-                />
-                <MiniMetric
-                  label="Remaining"
-                  value={formatCurrency(goalSummary.remaining)}
-                />
-                <MiniMetric
-                  label="Completed Goals"
-                  value={String(goalSummary.completedGoals)}
-                />
-              </div>
-
-              <div className="mt-5">
-                <div className="h-3 w-full rounded-full bg-slate-800">
-                  <div
-                    className="h-3 rounded-full bg-blue-500"
-                    style={{ width: `${goalSummary.progress}%` }}
+                <div className="space-y-4">
+                  <MiniMetric
+                    label="Planned Budget"
+                    value={formatCurrency(budgetSummary.totalPlanned)}
+                  />
+                  <MiniMetric
+                    label="Actual Spending"
+                    value={formatCurrency(budgetSummary.totalActual)}
+                  />
+                  <MiniMetric
+                    label="Remaining"
+                    value={formatCurrency(budgetSummary.remaining)}
+                    valueClass={
+                      budgetSummary.remaining < 0
+                        ? "text-red-300"
+                        : "text-emerald-300"
+                    }
                   />
                 </div>
-                <p className="mt-2 text-xs text-slate-500">
-                  {Math.round(goalSummary.progress)}% complete across all goals
-                </p>
-              </div>
-            </section>
 
-            <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-              <h2 className="text-lg font-medium">Build Progress</h2>
+                <div className="mt-5 rounded-xl border border-slate-800 bg-slate-950 p-4">
+                  <p className="text-sm text-slate-300">
+                    {budgetSummary.totalPlanned === 0
+                      ? "Set planned budget amounts to activate budget tracking."
+                      : budgetSummary.remaining >= 0
+                      ? `You have ${formatCurrency(
+                          budgetSummary.remaining
+                        )} left in your monthly budget.`
+                      : `You are ${formatCurrency(
+                          Math.abs(budgetSummary.remaining)
+                        )} over your monthly budget.`}
+                  </p>
+                </div>
+              </section>
 
-              <div className="mt-5 space-y-4">
-                <ProgressItem done label="Project created" />
-                <ProgressItem done label="Auth" />
-                <ProgressItem done label="Supabase accounts" />
-                <ProgressItem done label="Supabase transactions" />
-                <ProgressItem done label="CSV import" />
-                <ProgressItem done label="Budgets" />
-                <ProgressItem done label="Goals" />
-                <ProgressItem done label="Insights" />
-                <ProgressItem label="Supabase budgets" />
-                <ProgressItem label="Supabase goals" />
-                <ProgressItem label="Plaid sandbox" />
-              </div>
+              <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+                <div className="mb-4 flex items-center justify-between">
+                  <h2 className="text-lg font-medium">Goal Snapshot</h2>
+                  <Link
+                    href="/goals"
+                    className="text-sm text-blue-400 hover:text-blue-300"
+                  >
+                    Edit →
+                  </Link>
+                </div>
 
-              <div className="mt-6 rounded-xl border border-blue-900 bg-blue-950/30 p-4">
-                <p className="text-sm font-medium text-blue-200">
-                  Recommended next step
-                </p>
-                <p className="mt-1 text-sm text-blue-100/80">
-                  Migrate Budget and Goals to Supabase so every major module is
-                  cloud-backed.
-                </p>
-              </div>
-            </section>
-          </aside>
+                <div className="space-y-4">
+                  <MiniMetric
+                    label="Total Target"
+                    value={formatCurrency(goalSummary.totalTarget)}
+                  />
+                  <MiniMetric
+                    label="Current Progress"
+                    value={formatCurrency(goalSummary.totalCurrent)}
+                  />
+                  <MiniMetric
+                    label="Remaining"
+                    value={formatCurrency(goalSummary.remaining)}
+                  />
+                  <MiniMetric
+                    label="Completed Goals"
+                    value={String(goalSummary.completedGoals)}
+                  />
+                </div>
+
+                <div className="mt-5">
+                  <div className="h-3 w-full rounded-full bg-slate-800">
+                    <div
+                      className="h-3 rounded-full bg-blue-500"
+                      style={{ width: `${goalSummary.progress}%` }}
+                    />
+                  </div>
+                  <p className="mt-2 text-xs text-slate-500">
+                    {Math.round(goalSummary.progress)}% complete across all goals
+                  </p>
+                </div>
+              </section>
+
+              <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+                <h2 className="text-lg font-medium">Build Progress</h2>
+
+                <div className="mt-5 space-y-4">
+                  <ProgressItem done label="Project created" />
+                  <ProgressItem done label="Auth" />
+                  <ProgressItem done label="Supabase accounts" />
+                  <ProgressItem done label="Supabase transactions" />
+                  <ProgressItem done label="CSV import" />
+                  <ProgressItem done label="Budgets" />
+                  <ProgressItem done label="Goals" />
+                  <ProgressItem done label="Insights" />
+                  <ProgressItem label="Real AI API" />
+                  <ProgressItem label="Plaid sandbox" />
+                </div>
+
+                <div className="mt-6 rounded-xl border border-blue-900 bg-blue-950/30 p-4">
+                  <p className="text-sm font-medium text-blue-200">
+                    Recommended next step
+                  </p>
+                  <p className="mt-1 text-sm text-blue-100/80">
+                    Stabilize edits, confirmations, loading states, and
+                    responsive polish before pushing this branch to production.
+                  </p>
+                </div>
+              </section>
+            </aside>
+          </div>
         </div>
       </div>
     </main>
