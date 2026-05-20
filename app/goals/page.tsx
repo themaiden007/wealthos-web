@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import AppNav from "@/components/AppNav";
+import { useToast } from "@/components/ToastProvider";
 
 type GoalType =
   | "emergency_fund"
@@ -36,6 +37,8 @@ const GOAL_TYPE_OPTIONS: { label: string; value: GoalType }[] = [
 ];
 
 export default function GoalsPage() {
+  const { showToast } = useToast();
+
   const [goals, setGoals] = useState<Goal[]>([]);
   const [userId, setUserId] = useState("");
   const [userEmail, setUserEmail] = useState("");
@@ -83,7 +86,11 @@ export default function GoalsPage() {
         .order("created_at", { ascending: false });
 
       if (error) {
-        alert(error.message);
+        showToast({
+        type: "error",
+        title: "Something went wrong",
+        message: error.message,
+      });
       } else {
         setGoals((data || []) as Goal[]);
       }
@@ -130,12 +137,20 @@ export default function GoalsPage() {
     event.preventDefault();
 
     if (!userId) {
-      alert("You must be logged in.");
+      showToast({
+        type: "error",
+        title: "You must be logged in",
+        message: "Please log in before continuing.",
+      });
       return;
     }
 
     if (!name.trim()) {
-      alert("Please enter a goal name.");
+      showToast({
+        type: "warning",
+        title: "Goal name required",
+        message: "Please enter a goal name.",
+      });
       return;
     }
 
@@ -144,12 +159,20 @@ export default function GoalsPage() {
     const parsedMonthlyContribution = Number(monthlyContribution || 0);
 
     if (Number.isNaN(parsedTarget) || parsedTarget <= 0) {
-      alert("Please enter a valid target amount.");
+      showToast({
+        type: "warning",
+        title: "Invalid target amount",
+        message: "Please enter a valid target amount greater than $0.",
+      });
       return;
     }
 
     if (Number.isNaN(parsedCurrent) || parsedCurrent < 0) {
-      alert("Please enter a valid current amount.");
+      showToast({
+        type: "warning",
+        title: "Invalid current amount",
+        message: "Please enter a valid current amount.",
+      });
       return;
     }
 
@@ -157,7 +180,11 @@ export default function GoalsPage() {
       monthlyContribution &&
       (Number.isNaN(parsedMonthlyContribution) || parsedMonthlyContribution < 0)
     ) {
-      alert("Please enter a valid monthly contribution.");
+      showToast({
+        type: "warning",
+        title: "Invalid monthly contribution",
+        message: "Please enter a valid monthly contribution.",
+      });
       return;
     }
 
@@ -184,7 +211,11 @@ export default function GoalsPage() {
     setSaving(false);
 
     if (error) {
-      alert(error.message);
+      showToast({
+        type: "error",
+        title: "Something went wrong",
+        message: error.message,
+      });
       return;
     }
 
@@ -223,7 +254,11 @@ export default function GoalsPage() {
 
   async function saveGoalEdit(goalId: string) {
     if (!editName.trim()) {
-      alert("Please enter a goal name.");
+      showToast({
+        type: "warning",
+        title: "Goal name required",
+        message: "Please enter a goal name.",
+      });
       return;
     }
 
@@ -232,12 +267,20 @@ export default function GoalsPage() {
     const parsedMonthlyContribution = Number(editMonthlyContribution || 0);
 
     if (Number.isNaN(parsedTarget) || parsedTarget <= 0) {
-      alert("Please enter a valid target amount.");
+      showToast({
+        type: "warning",
+        title: "Invalid target amount",
+        message: "Please enter a valid target amount greater than $0.",
+      });
       return;
     }
 
     if (Number.isNaN(parsedCurrent) || parsedCurrent < 0) {
-      alert("Please enter a valid current amount.");
+      showToast({
+        type: "warning",
+        title: "Invalid current amount",
+        message: "Please enter a valid current amount.",
+      });
       return;
     }
 
@@ -245,7 +288,11 @@ export default function GoalsPage() {
       Number.isNaN(parsedMonthlyContribution) ||
       parsedMonthlyContribution < 0
     ) {
-      alert("Please enter a valid monthly contribution.");
+      showToast({
+        type: "warning",
+        title: "Invalid monthly contribution",
+        message: "Please enter a valid monthly contribution.",
+      });
       return;
     }
 
@@ -270,7 +317,11 @@ export default function GoalsPage() {
     setUpdatingId("");
 
     if (error) {
-      alert(error.message);
+      showToast({
+        type: "error",
+        title: "Something went wrong",
+        message: error.message,
+      });
       return;
     }
 
@@ -299,7 +350,11 @@ export default function GoalsPage() {
     setDeletingId("");
 
     if (error) {
-      alert(error.message);
+      showToast({
+        type: "error",
+        title: "Something went wrong",
+        message: error.message,
+      });
       return;
     }
 
@@ -337,7 +392,11 @@ export default function GoalsPage() {
     setUpdatingId("");
 
     if (error) {
-      alert(error.message);
+      showToast({
+        type: "error",
+        title: "Something went wrong",
+        message: error.message,
+      });
     }
   }
 
@@ -373,7 +432,11 @@ export default function GoalsPage() {
     setUpdatingId("");
 
     if (error) {
-      alert(error.message);
+      showToast({
+        type: "error",
+        title: "Something went wrong",
+        message: error.message,
+      });
     }
   }
 
@@ -440,7 +503,7 @@ export default function GoalsPage() {
                 Goals are saved to Supabase.
               </p>
 
-              <form onSubmit={addGoal} className="mt-5 space-y-4">
+              <form onSubmit={addGoal} noValidate className="mt-5 space-y-4">
                 <div>
                   <label className="text-sm text-slate-300">Goal Name</label>
                   <input
