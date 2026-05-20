@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import AppNav from "@/components/AppNav";
+import { useToast } from "@/components/ToastProvider";
 
 type AccountType =
   | "checking"
@@ -60,6 +61,8 @@ const ACCOUNT_TYPE_OPTIONS: { label: string; value: AccountType }[] = [
 ];
 
 export default function AccountsPage() {
+  const { showToast } = useToast();
+
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [userId, setUserId] = useState("");
   const [userEmail, setUserEmail] = useState("");
@@ -102,7 +105,11 @@ export default function AccountsPage() {
 
       if (error) {
         console.error("Failed to load accounts:", error);
-        alert(error.message);
+        showToast({
+          type: "error",
+          title: "Failed to load accounts",
+          message: error.message,
+        });
       } else {
         setAccounts((data || []) as Account[]);
       }
@@ -111,7 +118,7 @@ export default function AccountsPage() {
     }
 
     initialize();
-  }, []);
+  }, [showToast]);
 
   const totals = useMemo(() => {
     const activeAccounts = accounts.filter((account) => account.is_active);
@@ -135,19 +142,31 @@ export default function AccountsPage() {
     event.preventDefault();
 
     if (!userId) {
-      alert("You must be logged in.");
+      showToast({
+        type: "error",
+        title: "You must be logged in",
+        message: "Please log in before adding an account.",
+      });
       return;
     }
 
     if (!name.trim()) {
-      alert("Please enter an account name.");
+      showToast({
+        type: "warning",
+        title: "Account name required",
+        message: "Please enter an account name.",
+      });
       return;
     }
 
     const parsedBalance = Number(balance);
 
     if (Number.isNaN(parsedBalance)) {
-      alert("Please enter a valid balance.");
+      showToast({
+        type: "warning",
+        title: "Invalid balance",
+        message: "Please enter a valid number for the balance.",
+      });
       return;
     }
 
@@ -175,7 +194,11 @@ export default function AccountsPage() {
 
     if (error) {
       console.error("Failed to add account:", error);
-      alert(error.message);
+      showToast({
+        type: "error",
+        title: "Failed to add account",
+        message: error.message,
+      });
       return;
     }
 
@@ -185,6 +208,12 @@ export default function AccountsPage() {
     setInstitutionName("");
     setAccountType("checking");
     setBalance("");
+
+    showToast({
+      type: "success",
+      title: "Account added",
+      message: `${payload.name} was added successfully.`,
+    });
   }
 
   function startEditing(account: Account) {
@@ -205,14 +234,22 @@ export default function AccountsPage() {
 
   async function saveAccountEdit(accountId: string) {
     if (!editName.trim()) {
-      alert("Please enter an account name.");
+      showToast({
+        type: "warning",
+        title: "Account name required",
+        message: "Please enter an account name.",
+      });
       return;
     }
 
     const parsedBalance = Number(editBalance);
 
     if (Number.isNaN(parsedBalance)) {
-      alert("Please enter a valid balance.");
+      showToast({
+        type: "warning",
+        title: "Invalid balance",
+        message: "Please enter a valid number for the balance.",
+      });
       return;
     }
 
@@ -234,7 +271,11 @@ export default function AccountsPage() {
     setUpdatingId("");
 
     if (error) {
-      alert(error.message);
+      showToast({
+        type: "error",
+        title: "Failed to update account",
+        message: error.message,
+      });
       return;
     }
 
@@ -245,6 +286,12 @@ export default function AccountsPage() {
     );
 
     cancelEditing();
+
+    showToast({
+      type: "success",
+      title: "Account updated",
+      message: `${editName.trim()} was saved successfully.`,
+    });
   }
 
   async function deleteAccount(account: Account) {
@@ -264,11 +311,21 @@ export default function AccountsPage() {
     setDeletingId("");
 
     if (error) {
-      alert(error.message);
+      showToast({
+        type: "error",
+        title: "Failed to delete account",
+        message: error.message,
+      });
       return;
     }
 
     setAccounts((current) => current.filter((item) => item.id !== account.id));
+
+    showToast({
+      type: "success",
+      title: "Account deleted",
+      message: `${account.name} was removed.`,
+    });
   }
 
   async function toggleAccountStatus(account: Account) {
@@ -287,13 +344,25 @@ export default function AccountsPage() {
     setUpdatingId("");
 
     if (error) {
-      alert(error.message);
+      showToast({
+        type: "error",
+        title: "Failed to update account",
+        message: error.message,
+      });
       return;
     }
 
     setAccounts((current) =>
       current.map((item) => (item.id === account.id ? (data as Account) : item))
     );
+
+    showToast({
+      type: "success",
+      title: account.is_active ? "Account archived" : "Account restored",
+      message: `${account.name} is now ${
+        account.is_active ? "inactive" : "active"
+      }.`,
+    });
   }
 
   if (!hasLoaded) {
@@ -317,16 +386,11 @@ export default function AccountsPage() {
       <div className="min-w-0 flex-1">
         <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
           <div className="mb-8">
-            <p className="text-sm text-slate-400">WealthOS MVP</p>
+            <p className="text-sm text-slate-400">WealthOS</p>
             <h1 className="mt-2 text-3xl font-semibold">Accounts</h1>
             <p className="mt-1 text-sm text-slate-500">
-              Add, edit, archive, and manage Supabase-backed accounts.
+              Add, edit, archive, and manage your financial accounts.
             </p>
-            {userEmail && (
-              <p className="mt-1 text-xs text-slate-600">
-                Logged in as {userEmail}
-              </p>
-            )}
           </div>
 
           <div className="grid gap-4 md:grid-cols-3">
@@ -345,7 +409,8 @@ export default function AccountsPage() {
             <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
               <h2 className="text-lg font-medium">Add Manual Account</h2>
               <p className="mt-1 text-sm text-slate-400">
-                These accounts are stored in Supabase.
+                Add checking, savings, credit cards, loans, investments, and
+                assets.
               </p>
 
               <form onSubmit={addAccount} className="mt-5 space-y-4">

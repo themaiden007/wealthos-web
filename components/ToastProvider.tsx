@@ -3,6 +3,7 @@
 import {
   createContext,
   ReactNode,
+  useCallback,
   useContext,
   useMemo,
   useState,
@@ -21,34 +22,37 @@ type ToastContextValue = {
   showToast: (toast: Omit<Toast, "id">) => void;
 };
 
-const ToastContext = createContext<ToastContextValue | null>(null);
+const ToastContext = createContext<ToastContextValue | undefined>(undefined);
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
 
-  function removeToast(id: string) {
+  const removeToast = useCallback((id: string) => {
     setToasts((current) => current.filter((toast) => toast.id !== id));
-  }
+  }, []);
 
-  function showToast(toast: Omit<Toast, "id">) {
-    const id =
-      typeof crypto !== "undefined" && "randomUUID" in crypto
-        ? crypto.randomUUID()
-        : String(Date.now());
+  const showToast = useCallback(
+    (toast: Omit<Toast, "id">) => {
+      const id =
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : String(Date.now());
 
-    const nextToast: Toast = {
-      id,
-      ...toast,
-    };
+      const nextToast: Toast = {
+        id,
+        ...toast,
+      };
 
-    setToasts((current) => [nextToast, ...current].slice(0, 4));
+      setToasts((current) => [nextToast, ...current].slice(0, 4));
 
-    window.setTimeout(() => {
-      removeToast(id);
-    }, 4000);
-  }
+      window.setTimeout(() => {
+        removeToast(id);
+      }, 4000);
+    },
+    [removeToast]
+  );
 
-  const value = useMemo(() => ({ showToast }), []);
+  const value = useMemo(() => ({ showToast }), [showToast]);
 
   return (
     <ToastContext.Provider value={value}>
@@ -92,7 +96,11 @@ export function useToast() {
   const context = useContext(ToastContext);
 
   if (!context) {
-    throw new Error("useToast must be used inside ToastProvider");
+    return {
+      showToast: (toast: Omit<Toast, "id">) => {
+        console.warn("ToastProvider missing:", toast);
+      },
+    };
   }
 
   return context;
