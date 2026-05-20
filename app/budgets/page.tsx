@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import AppNav from "@/components/AppNav";
+import { useToast } from "@/components/ToastProvider";
 
 type TransactionType = "income" | "expense" | "transfer";
 
@@ -54,6 +55,8 @@ const DEFAULT_BUDGET_CATEGORIES = [
 ];
 
 export default function BudgetPage() {
+  const { showToast } = useToast();
+
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [budgetItems, setBudgetItems] = useState<BudgetItem[]>([]);
   const [userId, setUserId] = useState("");
@@ -94,7 +97,11 @@ export default function BudgetPage() {
         .order("date", { ascending: false });
 
       if (transactionError) {
-        alert(transactionError.message);
+        showToast({
+          type: "error",
+          title: "Failed to load transactions",
+          message: transactionError.message,
+        });
         setHasLoaded(true);
         return;
       }
@@ -106,7 +113,11 @@ export default function BudgetPage() {
         .order("category", { ascending: true });
 
       if (budgetError) {
-        alert(budgetError.message);
+        showToast({
+          type: "error",
+          title: "Failed to load budget",
+          message: budgetError.message,
+        });
         setHasLoaded(true);
         return;
       }
@@ -129,7 +140,11 @@ export default function BudgetPage() {
           .select();
 
         if (insertError) {
-          alert(insertError.message);
+          showToast({
+            type: "error",
+            title: "Failed to create starter budget",
+            message: insertError.message,
+          });
         } else {
           setBudgetItems((inserted || []) as BudgetItem[]);
         }
@@ -141,7 +156,7 @@ export default function BudgetPage() {
     }
 
     initialize();
-  }, []);
+  }, [showToast]);
 
   const budgetRows = useMemo(() => {
     const monthTransactions = transactions.filter(
@@ -244,22 +259,41 @@ export default function BudgetPage() {
     setSavingCategory("");
 
     if (error) {
-      alert(error.message);
+      showToast({
+        type: "error",
+        title: "Failed to update budget",
+        message: error.message,
+      });
+      return;
     }
+
+    showToast({
+      type: "success",
+      title: "Budget updated",
+      message: "Planned amount was saved.",
+    });
   }
 
   async function addCustomCategory(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (!userId) {
-      alert("You must be logged in.");
+      showToast({
+        type: "error",
+        title: "You must be logged in",
+        message: "Please log in before adding a budget category.",
+      });
       return;
     }
 
     const category = newCategoryName.trim();
 
     if (!category) {
-      alert("Please enter a category name.");
+      showToast({
+        type: "warning",
+        title: "Category name required",
+        message: "Please enter a category name.",
+      });
       return;
     }
 
@@ -268,14 +302,22 @@ export default function BudgetPage() {
     );
 
     if (alreadyExists) {
-      alert("That category already exists.");
+      showToast({
+        type: "warning",
+        title: "Category already exists",
+        message: "Choose a different category name.",
+      });
       return;
     }
 
     const parsedBudget = Number(newCategoryBudget || 0);
 
     if (Number.isNaN(parsedBudget) || parsedBudget < 0) {
-      alert("Please enter a valid planned amount.");
+      showToast({
+        type: "warning",
+        title: "Invalid planned amount",
+        message: "Please enter a valid planned amount.",
+      });
       return;
     }
 
@@ -295,7 +337,11 @@ export default function BudgetPage() {
     setAddingCategory(false);
 
     if (error) {
-      alert(error.message);
+      showToast({
+        type: "error",
+        title: "Failed to add category",
+        message: error.message,
+      });
       return;
     }
 
@@ -307,6 +353,12 @@ export default function BudgetPage() {
 
     setNewCategoryName("");
     setNewCategoryBudget("");
+
+    showToast({
+      type: "success",
+      title: "Category added",
+      message: `${category} was added to your budget.`,
+    });
   }
 
   async function deleteBudgetCategory(row: {
@@ -331,11 +383,21 @@ export default function BudgetPage() {
     setDeletingCategory("");
 
     if (error) {
-      alert(error.message);
+      showToast({
+        type: "error",
+        title: "Failed to delete category",
+        message: error.message,
+      });
       return;
     }
 
     setBudgetItems((current) => current.filter((item) => item.id !== row.id));
+
+    showToast({
+      type: "success",
+      title: "Category deleted",
+      message: `${row.category} was removed from your budget.`,
+    });
   }
 
   async function resetBudget() {
@@ -358,13 +420,23 @@ export default function BudgetPage() {
     setResetting(false);
 
     if (error) {
-      alert(error.message);
+      showToast({
+        type: "error",
+        title: "Failed to reset budget",
+        message: error.message,
+      });
       return;
     }
 
     setBudgetItems((current) =>
       current.map((item) => ({ ...item, planned_amount: 0 }))
     );
+
+    showToast({
+      type: "success",
+      title: "Budget reset",
+      message: "All planned amounts were reset to $0.",
+    });
   }
 
   async function autoFillBudgetFromActuals() {
@@ -403,8 +475,19 @@ export default function BudgetPage() {
     const failed = results.find((result) => result.error);
 
     if (failed?.error) {
-      alert(failed.error.message);
+      showToast({
+        type: "error",
+        title: "Autofill failed",
+        message: failed.error.message,
+      });
+      return;
     }
+
+    showToast({
+      type: "success",
+      title: "Budget autofilled",
+      message: "Planned amounts were set from actual spending.",
+    });
   }
 
   if (!hasLoaded) {
@@ -428,17 +511,12 @@ export default function BudgetPage() {
       <div className="min-w-0 flex-1">
         <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
           <div className="mb-8">
-            <p className="text-sm text-slate-400">WealthOS MVP</p>
+            <p className="text-sm text-slate-400">WealthOS</p>
             <h1 className="mt-2 text-3xl font-semibold">Budgets</h1>
             <p className="mt-1 text-sm text-slate-500">
               Plan monthly category spending and compare it against actual
-              Supabase transactions.
+              transactions.
             </p>
-            {userEmail && (
-              <p className="mt-1 text-xs text-slate-600">
-                Logged in as {userEmail}
-              </p>
-            )}
           </div>
 
           <div className="mb-6 flex flex-col gap-4 rounded-2xl border border-slate-800 bg-slate-900 p-5 lg:flex-row lg:items-center lg:justify-between">
