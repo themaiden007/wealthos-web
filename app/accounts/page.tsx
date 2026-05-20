@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import AppNav from "@/components/AppNav";
 import { useToast } from "@/components/ToastProvider";
+import { useConfirm } from "@/components/ConfirmProvider";
 
 type AccountType =
   | "checking"
@@ -62,6 +63,7 @@ const ACCOUNT_TYPE_OPTIONS: { label: string; value: AccountType }[] = [
 
 export default function AccountsPage() {
   const { showToast } = useToast();
+  const { confirm } = useConfirm();
 
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [userId, setUserId] = useState("");
@@ -295,9 +297,14 @@ export default function AccountsPage() {
   }
 
   async function deleteAccount(account: Account) {
-    const confirmed = confirm(
-      `Delete "${account.name}"?\n\nThis will permanently remove the account from Supabase. This action cannot be undone.`
-    );
+    const confirmed = await confirm({
+      title: `Delete ${account.name}?`,
+      message:
+        "This will permanently remove the account from Supabase.\n\nThis action cannot be undone.",
+      confirmLabel: "Delete Account",
+      cancelLabel: "Cancel",
+      variant: "danger",
+    });
 
     if (!confirmed) return;
 
@@ -413,7 +420,7 @@ export default function AccountsPage() {
                 assets.
               </p>
 
-              <form onSubmit={addAccount} className="mt-5 space-y-4">
+              <form onSubmit={addAccount} noValidate className="mt-5 space-y-4">
                 <div>
                   <label className="text-sm text-slate-300">Account Name</label>
                   <input
