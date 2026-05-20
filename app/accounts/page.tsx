@@ -30,8 +30,6 @@ type Account = {
   updated_at: string;
 };
 
-const OLD_LOCAL_ACCOUNTS_KEY = "wealthos_accounts_v1";
-
 const ASSET_TYPES: AccountType[] = [
   "checking",
   "savings",
@@ -67,7 +65,6 @@ export default function AccountsPage() {
   const [userEmail, setUserEmail] = useState("");
   const [hasLoaded, setHasLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [importing, setImporting] = useState(false);
   const [updatingId, setUpdatingId] = useState("");
   const [deletingId, setDeletingId] = useState("");
 
@@ -165,6 +162,7 @@ export default function AccountsPage() {
       currency: "USD",
       source: "manual",
       is_active: true,
+      updated_at: new Date().toISOString(),
     };
 
     const { data, error } = await supabase
@@ -249,90 +247,6 @@ export default function AccountsPage() {
     cancelEditing();
   }
 
-  async function importOldLocalAccounts() {
-    if (!userId) {
-      alert("You must be logged in.");
-      return;
-    }
-
-    const saved = window.localStorage.getItem(OLD_LOCAL_ACCOUNTS_KEY);
-
-    if (!saved) {
-      alert("No old local accounts found.");
-      return;
-    }
-
-    let parsed: any[];
-
-    try {
-      parsed = JSON.parse(saved);
-    } catch {
-      alert("Old local accounts data is not valid JSON.");
-      return;
-    }
-
-    if (!Array.isArray(parsed) || parsed.length === 0) {
-      alert("No old local accounts found.");
-      return;
-    }
-
-    const confirmed = confirm(
-      `Import ${parsed.length} old local account(s) into Supabase? Only click this once to avoid duplicates.`
-    );
-
-    if (!confirmed) return;
-
-    setImporting(true);
-
-    const existingNames = new Set(
-      accounts.map((account) =>
-        `${account.name}-${account.account_type}-${Number(account.balance)}`
-      )
-    );
-
-    const payload = parsed
-      .filter((account) => {
-        const key = `${account.name}-${account.accountType}-${Number(
-          account.balance || 0
-        )}`;
-
-        return !existingNames.has(key);
-      })
-      .map((account) => ({
-        user_id: userId,
-        name: account.name || "Imported Account",
-        institution_name: account.institutionName || "Manual",
-        account_type: account.accountType || "checking",
-        balance: Number(account.balance || 0),
-        currency: account.currency || "USD",
-        source: "manual",
-        is_active: account.isActive ?? true,
-      }));
-
-    if (payload.length === 0) {
-      setImporting(false);
-      alert("No new accounts to import. They may already exist in Supabase.");
-      return;
-    }
-
-    const { data, error } = await supabase
-      .from("accounts")
-      .insert(payload)
-      .select();
-
-    setImporting(false);
-
-    if (error) {
-      console.error("Failed to import old local accounts:", error);
-      alert(error.message);
-      return;
-    }
-
-    setAccounts((current) => [...((data || []) as Account[]), ...current]);
-
-    alert(`Imported ${data?.length || 0} old local account(s) into Supabase.`);
-  }
-
   async function deleteAccount(account: Account) {
     const confirmed = confirm(
       `Delete "${account.name}"?\n\nThis will permanently remove the account from Supabase. This action cannot be undone.`
@@ -342,7 +256,10 @@ export default function AccountsPage() {
 
     setDeletingId(account.id);
 
-    const { error } = await supabase.from("accounts").delete().eq("id", account.id);
+    const { error } = await supabase
+      .from("accounts")
+      .delete()
+      .eq("id", account.id);
 
     setDeletingId("");
 
@@ -351,9 +268,7 @@ export default function AccountsPage() {
       return;
     }
 
-    setAccounts((current) =>
-      current.filter((item) => item.id !== account.id)
-    );
+    setAccounts((current) => current.filter((item) => item.id !== account.id));
   }
 
   async function toggleAccountStatus(account: Account) {
@@ -497,89 +412,67 @@ export default function AccountsPage() {
                   {saving ? "Saving..." : "Add Account"}
                 </button>
               </form>
-
-              <div className="mt-5 rounded-xl border border-slate-800 bg-slate-950 p-4">
-                <p className="text-sm font-medium text-slate-200">
-                  Migration utility
-                </p>
-                <p className="mt-1 text-xs text-slate-500">
-                  Use only if you still need to import old browser-stored
-                  accounts.
-                </p>
-
-                <button
-                  type="button"
-                  onClick={importOldLocalAccounts}
-                  disabled={importing}
-                  className="mt-3 w-full rounded-xl border border-blue-900 px-4 py-2 text-sm text-blue-300 hover:bg-blue-950 disabled:opacity-60"
-                >
-                  {importing ? "Importing..." : "Import Old Local Accounts"}
-                </button>
-              </div>
             </section>
 
             <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-              <div className="mb-4">
-                <h2 className="text-lg font-medium">Account List</h2>
-                <p className="text-sm text-slate-400">
-                  {accounts.length} account
-                  {accounts.length === 1 ? "" : "s"} added
-                </p>
+              <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <h2 className="text-lg font-medium">Account List</h2>
+                  <p className="text-sm text-slate-400">
+                    {accounts.length} account
+                    {accounts.length === 1 ? "" : "s"} added
+                  </p>
+                </div>
               </div>
 
-              <div className="overflow-x-auto rounded-xl border border-slate-800">
-                <table className="w-full min-w-[900px] text-left text-sm">
-                  <thead className="bg-slate-950 text-slate-400">
-                    <tr>
-                      <th className="px-4 py-3">Account</th>
-                      <th className="px-4 py-3">Type</th>
-                      <th className="px-4 py-3 text-right">Balance</th>
-                      <th className="px-4 py-3 text-right">Actions</th>
-                    </tr>
-                  </thead>
+              {accounts.length === 0 ? (
+                <div className="rounded-2xl border border-slate-800 bg-slate-950 p-8 text-center text-slate-500">
+                  No accounts yet. Add your first manual account.
+                </div>
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-3">
+                  {accounts.map((account) => {
+                    const isEditing = editingId === account.id;
+                    const isBusy =
+                      updatingId === account.id || deletingId === account.id;
 
-                  <tbody>
-                    {accounts.map((account) => {
-                      const isEditing = editingId === account.id;
-                      const isBusy =
-                        updatingId === account.id || deletingId === account.id;
+                    return (
+                      <div
+                        key={account.id}
+                        className="rounded-2xl border border-slate-800 bg-slate-950 p-4"
+                      >
+                        {isEditing ? (
+                          <div className="space-y-3">
+                            <div>
+                              <label className="text-xs text-slate-400">
+                                Account Name
+                              </label>
+                              <input
+                                value={editName}
+                                onChange={(event) =>
+                                  setEditName(event.target.value)
+                                }
+                                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                              />
+                            </div>
 
-                      return (
-                        <tr
-                          key={account.id}
-                          className="border-t border-slate-800 text-slate-200"
-                        >
-                          <td className="px-4 py-3 align-top">
-                            {isEditing ? (
-                              <div className="space-y-2">
-                                <input
-                                  value={editName}
-                                  onChange={(event) =>
-                                    setEditName(event.target.value)
-                                  }
-                                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
-                                />
-                                <input
-                                  value={editInstitutionName}
-                                  onChange={(event) =>
-                                    setEditInstitutionName(event.target.value)
-                                  }
-                                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
-                                />
-                              </div>
-                            ) : (
-                              <div>
-                                <p className="font-medium">{account.name}</p>
-                                <p className="text-xs text-slate-500">
-                                  {account.institution_name || "Manual"}
-                                  {!account.is_active ? " • inactive" : ""}
-                                </p>
-                              </div>
-                            )}
-                          </td>
+                            <div>
+                              <label className="text-xs text-slate-400">
+                                Institution
+                              </label>
+                              <input
+                                value={editInstitutionName}
+                                onChange={(event) =>
+                                  setEditInstitutionName(event.target.value)
+                                }
+                                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                              />
+                            </div>
 
-                          <td className="px-4 py-3 align-top capitalize text-slate-300">
-                            {isEditing ? (
+                            <div>
+                              <label className="text-xs text-slate-400">
+                                Type
+                              </label>
                               <select
                                 value={editAccountType}
                                 onChange={(event) =>
@@ -587,7 +480,7 @@ export default function AccountsPage() {
                                     event.target.value as AccountType
                                   )
                                 }
-                                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-blue-500"
                               >
                                 {ACCOUNT_TYPE_OPTIONS.map((option) => (
                                   <option
@@ -598,13 +491,12 @@ export default function AccountsPage() {
                                   </option>
                                 ))}
                               </select>
-                            ) : (
-                              account.account_type.replaceAll("_", " ")
-                            )}
-                          </td>
+                            </div>
 
-                          <td className="px-4 py-3 text-right align-top font-medium">
-                            {isEditing ? (
+                            <div>
+                              <label className="text-xs text-slate-400">
+                                Balance
+                              </label>
                               <input
                                 value={editBalance}
                                 onChange={(event) =>
@@ -612,91 +504,110 @@ export default function AccountsPage() {
                                 }
                                 type="number"
                                 step="0.01"
-                                className="w-32 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-right text-sm outline-none focus:border-blue-500"
+                                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-blue-500"
                               />
-                            ) : (
-                              formatCurrency(Number(account.balance))
-                            )}
-                          </td>
+                            </div>
 
-                          <td className="px-4 py-3 text-right align-top">
-                            {isEditing ? (
-                              <div className="flex justify-end gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => saveAccountEdit(account.id)}
-                                  disabled={isBusy}
-                                  className="rounded-lg bg-blue-600 px-3 py-1 text-xs font-medium text-white hover:bg-blue-500 disabled:opacity-60"
-                                >
-                                  {updatingId === account.id
-                                    ? "Saving..."
-                                    : "Save"}
-                                </button>
+                            <div className="grid grid-cols-2 gap-2 pt-2">
+                              <button
+                                type="button"
+                                onClick={() => saveAccountEdit(account.id)}
+                                disabled={isBusy}
+                                className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white hover:bg-blue-500 disabled:opacity-60"
+                              >
+                                {updatingId === account.id
+                                  ? "Saving..."
+                                  : "Save"}
+                              </button>
 
-                                <button
-                                  type="button"
-                                  onClick={cancelEditing}
-                                  disabled={isBusy}
-                                  className="rounded-lg border border-slate-700 px-3 py-1 text-xs text-slate-300 hover:bg-slate-800 disabled:opacity-60"
-                                >
-                                  Cancel
-                                </button>
+                              <button
+                                type="button"
+                                onClick={cancelEditing}
+                                disabled={isBusy}
+                                className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800 disabled:opacity-60"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="truncate font-medium">
+                                  {account.name}
+                                </p>
+                                <p className="mt-1 truncate text-xs text-slate-500">
+                                  {account.institution_name || "Manual"}
+                                </p>
                               </div>
-                            ) : (
-                              <div className="flex justify-end gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => startEditing(account)}
-                                  disabled={isBusy}
-                                  className="rounded-lg border border-blue-900 px-3 py-1 text-xs text-blue-300 hover:bg-blue-950 disabled:opacity-60"
-                                >
-                                  Edit
-                                </button>
 
-                                <button
-                                  type="button"
-                                  onClick={() => toggleAccountStatus(account)}
-                                  disabled={isBusy}
-                                  className="rounded-lg border border-slate-700 px-3 py-1 text-xs text-slate-300 hover:bg-slate-800 disabled:opacity-60"
-                                >
-                                  {updatingId === account.id
-                                    ? "Updating..."
-                                    : account.is_active
-                                    ? "Archive"
-                                    : "Restore"}
-                                </button>
+                              <span
+                                className={
+                                  account.is_active
+                                    ? "shrink-0 rounded-full bg-emerald-500/10 px-2 py-1 text-xs text-emerald-300"
+                                    : "shrink-0 rounded-full bg-slate-700 px-2 py-1 text-xs text-slate-300"
+                                }
+                              >
+                                {account.is_active ? "Active" : "Inactive"}
+                              </span>
+                            </div>
 
-                                <button
-                                  type="button"
-                                  onClick={() => deleteAccount(account)}
-                                  disabled={isBusy}
-                                  className="rounded-lg border border-red-900 px-3 py-1 text-xs text-red-300 hover:bg-red-950 disabled:opacity-60"
-                                >
-                                  {deletingId === account.id
-                                    ? "Deleting..."
-                                    : "Delete"}
-                                </button>
-                              </div>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
+                            <div className="mt-5">
+                              <p className="text-xs text-slate-500">Balance</p>
+                              <p className="mt-1 break-words text-2xl font-semibold">
+                                {formatCurrency(Number(account.balance))}
+                              </p>
+                            </div>
 
-                    {accounts.length === 0 && (
-                      <tr>
-                        <td
-                          colSpan={4}
-                          className="px-4 py-10 text-center text-slate-500"
-                        >
-                          No Supabase accounts yet. Add your first manual
-                          account or import old local accounts.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                            <div className="mt-4 flex flex-wrap gap-2">
+                              <span className="rounded-full bg-slate-800 px-2 py-1 text-xs capitalize text-slate-300">
+                                {account.account_type.replaceAll("_", " ")}
+                              </span>
+                              <span className="rounded-full bg-slate-800 px-2 py-1 text-xs text-slate-400">
+                                {account.currency || "USD"}
+                              </span>
+                            </div>
+
+                            <div className="mt-5 grid grid-cols-3 gap-2">
+                              <button
+                                type="button"
+                                onClick={() => startEditing(account)}
+                                disabled={isBusy}
+                                className="rounded-lg border border-blue-900 px-3 py-2 text-xs text-blue-300 hover:bg-blue-950 disabled:opacity-60"
+                              >
+                                Edit
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => toggleAccountStatus(account)}
+                                disabled={isBusy}
+                                className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800 disabled:opacity-60"
+                              >
+                                {updatingId === account.id
+                                  ? "..."
+                                  : account.is_active
+                                  ? "Archive"
+                                  : "Restore"}
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => deleteAccount(account)}
+                                disabled={isBusy}
+                                className="rounded-lg border border-red-900 px-3 py-2 text-xs text-red-300 hover:bg-red-950 disabled:opacity-60"
+                              >
+                                {deletingId === account.id ? "..." : "Delete"}
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </section>
           </div>
         </div>
