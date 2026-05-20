@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import AppNav from "@/components/AppNav";
 
 type AccountType =
   | "checking"
@@ -380,24 +380,27 @@ export default function InsightsPage() {
     setQuestion(q);
   }
 
-  async function logout() {
-    await supabase.auth.signOut();
-    window.location.href = "/login";
-  }
-
   if (!hasLoaded) {
     return (
-      <main className="min-h-screen bg-slate-950 p-8 text-white">
-        Loading insights...
+      <main className="min-h-screen bg-slate-950 text-white md:flex">
+        <AppNav userEmail={userEmail} />
+
+        <div className="min-w-0 flex-1">
+          <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+            Loading insights...
+          </div>
+        </div>
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen bg-slate-950 text-white">
-      <div className="mx-auto max-w-7xl px-6 py-8">
-        <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
+    <main className="min-h-screen bg-slate-950 text-white md:flex">
+      <AppNav userEmail={userEmail} />
+
+      <div className="min-w-0 flex-1">
+        <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+          <div className="mb-8">
             <p className="text-sm text-slate-400">WealthOS MVP</p>
             <h1 className="mt-2 text-3xl font-semibold">Insights</h1>
             <p className="mt-1 text-sm text-slate-500">
@@ -411,207 +414,177 @@ export default function InsightsPage() {
             )}
           </div>
 
-          <div className="flex flex-wrap gap-3">
-            <Link
-              href="/"
-              className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-900"
-            >
-              Dashboard
-            </Link>
-
-            <Link
-              href="/budgets"
-              className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-900"
-            >
-              Budgets
-            </Link>
-
-            <Link
-              href="/goals"
-              className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-900"
-            >
-              Goals
-            </Link>
-
-            <button
-              type="button"
-              onClick={logout}
-              className="rounded-xl border border-red-900 px-4 py-2 text-sm text-red-300 hover:bg-red-950"
-            >
-              Logout
-            </button>
+          <div className="grid gap-4 md:grid-cols-4">
+            <SummaryCard
+              title="Net Worth"
+              value={formatCurrency(accountSummary.netWorth)}
+            />
+            <SummaryCard
+              title="Monthly Cash Flow"
+              value={formatCurrency(monthlySummary.cashFlow)}
+            />
+            <SummaryCard
+              title="Savings Rate"
+              value={`${Math.round(monthlySummary.savingsRate)}%`}
+            />
+            <SummaryCard
+              title="Budget Remaining"
+              value={formatCurrency(budgetSummary.remaining)}
+            />
           </div>
-        </div>
 
-        <div className="grid gap-4 md:grid-cols-4">
-          <SummaryCard
-            title="Net Worth"
-            value={formatCurrency(accountSummary.netWorth)}
-          />
-          <SummaryCard
-            title="Monthly Cash Flow"
-            value={formatCurrency(monthlySummary.cashFlow)}
-          />
-          <SummaryCard
-            title="Savings Rate"
-            value={`${Math.round(monthlySummary.savingsRate)}%`}
-          />
-          <SummaryCard
-            title="Budget Remaining"
-            value={formatCurrency(budgetSummary.remaining)}
-          />
-        </div>
-
-        <div className="mt-8 grid gap-6 xl:grid-cols-[1fr_420px]">
-          <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-            <h2 className="text-lg font-medium">AI-Style Ask</h2>
-            <p className="mt-1 text-sm text-slate-400">
-              This uses a local rules engine over your Supabase data. Later we
-              can connect it to an AI API endpoint.
-            </p>
-
-            <div className="mt-5">
-              <textarea
-                value={question}
-                onChange={(event) => setQuestion(event.target.value)}
-                rows={4}
-                placeholder="Ask something like: Where did my money go this month?"
-                className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm outline-none focus:border-blue-500"
-              />
-
-              <div className="mt-3 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => askQuestion()}
-                  className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium hover:bg-blue-500"
-                >
-                  Ask
-                </button>
-
-                {QUICK_QUESTIONS.map((item) => (
-                  <button
-                    key={item}
-                    type="button"
-                    onClick={() => askQuestion(item)}
-                    className="rounded-xl border border-slate-700 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800"
-                  >
-                    {item}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {answer && (
-              <div className="mt-6 rounded-2xl border border-blue-900 bg-blue-950/30 p-5">
-                <p className="text-sm font-medium text-blue-200">Answer</p>
-                <div className="mt-3 whitespace-pre-line text-sm leading-6 text-blue-50/90">
-                  {answer}
-                </div>
-              </div>
-            )}
-
-            <div className="mt-8">
-              <h2 className="text-lg font-medium">Generated Insights</h2>
+          <div className="mt-8 grid gap-6 xl:grid-cols-[1fr_420px]">
+            <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+              <h2 className="text-lg font-medium">AI-Style Ask</h2>
               <p className="mt-1 text-sm text-slate-400">
-                Automatically generated from your current Supabase data.
+                This currently uses a local rules engine over your Supabase data.
+                Later we can connect this to a real AI API endpoint.
               </p>
 
-              <div className="mt-5 grid gap-4 md:grid-cols-2">
-                {insights.map((insight) => (
-                  <InsightCard key={insight.title} insight={insight} />
-                ))}
+              <div className="mt-5">
+                <textarea
+                  value={question}
+                  onChange={(event) => setQuestion(event.target.value)}
+                  rows={4}
+                  placeholder="Ask something like: Where did my money go this month?"
+                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm outline-none focus:border-blue-500"
+                />
+
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => askQuestion()}
+                    className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium hover:bg-blue-500"
+                  >
+                    Ask
+                  </button>
+
+                  {QUICK_QUESTIONS.map((item) => (
+                    <button
+                      key={item}
+                      type="button"
+                      onClick={() => askQuestion(item)}
+                      className="rounded-xl border border-slate-700 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800"
+                    >
+                      {item}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
-          </section>
 
-          <aside className="space-y-6">
-            <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-              <h2 className="text-lg font-medium">Top Spending</h2>
-
-              <div className="mt-5 space-y-4">
-                {spendingByCategory.slice(0, 6).map((row) => (
-                  <div key={row.category}>
-                    <div className="mb-1 flex justify-between text-sm">
-                      <span className="text-slate-300">{row.category}</span>
-                      <span className="font-medium">
-                        {formatCurrency(row.amount)}
-                      </span>
-                    </div>
-                    <div className="h-2 rounded-full bg-slate-800">
-                      <div
-                        className="h-2 rounded-full bg-blue-500"
-                        style={{
-                          width: `${getCategoryPercent(
-                            row.amount,
-                            monthlySummary.spending
-                          )}%`,
-                        }}
-                      />
-                    </div>
+              {answer && (
+                <div className="mt-6 rounded-2xl border border-blue-900 bg-blue-950/30 p-5">
+                  <p className="text-sm font-medium text-blue-200">Answer</p>
+                  <div className="mt-3 whitespace-pre-line text-sm leading-6 text-blue-50/90">
+                    {answer}
                   </div>
-                ))}
+                </div>
+              )}
 
-                {spendingByCategory.length === 0 && (
-                  <p className="text-sm text-slate-500">
-                    No spending data for this month yet.
+              <div className="mt-8">
+                <h2 className="text-lg font-medium">Generated Insights</h2>
+                <p className="mt-1 text-sm text-slate-400">
+                  Automatically generated from your current Supabase data.
+                </p>
+
+                <div className="mt-5 grid gap-4 md:grid-cols-2">
+                  {insights.map((insight) => (
+                    <InsightCard key={insight.title} insight={insight} />
+                  ))}
+                </div>
+              </div>
+            </section>
+
+            <aside className="space-y-6">
+              <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+                <h2 className="text-lg font-medium">Top Spending</h2>
+
+                <div className="mt-5 space-y-4">
+                  {spendingByCategory.slice(0, 6).map((row) => (
+                    <div key={row.category}>
+                      <div className="mb-1 flex justify-between text-sm">
+                        <span className="text-slate-300">{row.category}</span>
+                        <span className="font-medium">
+                          {formatCurrency(row.amount)}
+                        </span>
+                      </div>
+                      <div className="h-2 rounded-full bg-slate-800">
+                        <div
+                          className="h-2 rounded-full bg-blue-500"
+                          style={{
+                            width: `${getCategoryPercent(
+                              row.amount,
+                              monthlySummary.spending
+                            )}%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+
+                  {spendingByCategory.length === 0 && (
+                    <p className="text-sm text-slate-500">
+                      No spending data for this month yet.
+                    </p>
+                  )}
+                </div>
+              </section>
+
+              <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+                <h2 className="text-lg font-medium">Financial Snapshot</h2>
+
+                <div className="mt-5 space-y-4">
+                  <MiniMetric
+                    label="Income"
+                    value={formatCurrency(monthlySummary.income)}
+                  />
+                  <MiniMetric
+                    label="Spending"
+                    value={formatCurrency(monthlySummary.spending)}
+                  />
+                  <MiniMetric
+                    label="Cash Flow"
+                    value={formatCurrency(monthlySummary.cashFlow)}
+                    valueClass={
+                      monthlySummary.cashFlow >= 0
+                        ? "text-emerald-300"
+                        : "text-red-300"
+                    }
+                  />
+                  <MiniMetric
+                    label="Budget Planned"
+                    value={formatCurrency(budgetSummary.totalPlanned)}
+                  />
+                  <MiniMetric
+                    label="Goal Remaining"
+                    value={formatCurrency(goalSummary.remaining)}
+                  />
+                </div>
+              </section>
+
+              <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+                <h2 className="text-lg font-medium">MVP Status</h2>
+                <div className="mt-5 space-y-3 text-sm text-slate-300">
+                  <StatusRow label="Auth" />
+                  <StatusRow label="Accounts" />
+                  <StatusRow label="Transactions" />
+                  <StatusRow label="Budgets" />
+                  <StatusRow label="Goals" />
+                  <StatusRow label="Insights" />
+                </div>
+
+                <div className="mt-6 rounded-xl border border-blue-900 bg-blue-950/30 p-4">
+                  <p className="text-sm font-medium text-blue-200">
+                    Recommended next step
                   </p>
-                )}
-              </div>
-            </section>
-
-            <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-              <h2 className="text-lg font-medium">Financial Snapshot</h2>
-
-              <div className="mt-5 space-y-4">
-                <MiniMetric
-                  label="Income"
-                  value={formatCurrency(monthlySummary.income)}
-                />
-                <MiniMetric
-                  label="Spending"
-                  value={formatCurrency(monthlySummary.spending)}
-                />
-                <MiniMetric
-                  label="Cash Flow"
-                  value={formatCurrency(monthlySummary.cashFlow)}
-                  valueClass={
-                    monthlySummary.cashFlow >= 0
-                      ? "text-emerald-300"
-                      : "text-red-300"
-                  }
-                />
-                <MiniMetric
-                  label="Budget Planned"
-                  value={formatCurrency(budgetSummary.totalPlanned)}
-                />
-                <MiniMetric
-                  label="Goal Remaining"
-                  value={formatCurrency(goalSummary.remaining)}
-                />
-              </div>
-            </section>
-
-            <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-              <h2 className="text-lg font-medium">MVP Status</h2>
-              <div className="mt-5 space-y-3 text-sm text-slate-300">
-                <StatusRow label="Auth" />
-                <StatusRow label="Accounts" />
-                <StatusRow label="Transactions" />
-                <StatusRow label="Budgets" />
-                <StatusRow label="Goals" />
-                <StatusRow label="Insights" />
-              </div>
-
-              <div className="mt-6 rounded-xl border border-blue-900 bg-blue-950/30 p-4">
-                <p className="text-sm font-medium text-blue-200">
-                  Recommended next step
-                </p>
-                <p className="mt-1 text-sm text-blue-100/80">
-                  Add real AI API insights and then Plaid Sandbox account sync.
-                </p>
-              </div>
-            </section>
-          </aside>
+                  <p className="mt-1 text-sm text-blue-100/80">
+                    After this polish sprint passes local build, merge and push
+                    to production.
+                  </p>
+                </div>
+              </section>
+            </aside>
+          </div>
         </div>
       </div>
     </main>
@@ -757,7 +730,8 @@ function generateInsights({
       title: "No goals created",
       severity: "info",
       message: "You have not created any financial goals yet.",
-      action: "Create an emergency fund, debt payoff, investment, or purchase goal.",
+      action:
+        "Create an emergency fund, debt payoff, investment, or purchase goal.",
     });
   } else if (goalSummary.progress >= 50) {
     insights.push({
@@ -949,7 +923,11 @@ function generateAnswer(
 
 function InsightCard({ insight }: { insight: Insight }) {
   return (
-    <div className={`rounded-2xl border p-5 ${getInsightClass(insight.severity)}`}>
+    <div
+      className={`rounded-2xl border p-5 ${getInsightClass(
+        insight.severity
+      )}`}
+    >
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-sm font-medium">{insight.title}</p>
