@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import AppNav from "@/components/AppNav";
 import { useToast } from "@/components/ToastProvider";
@@ -80,11 +81,17 @@ type Goal = {
   updated_at: string;
 };
 
-type Insight = {
-  title: string;
-  severity: "good" | "warning" | "danger" | "info";
-  message: string;
-  action: string;
+type AiInsightResponse = {
+  summary: string;
+  insights: Array<{
+    title: string;
+    detail: string;
+    severity: "good" | "warning" | "danger" | "info";
+  }>;
+  actionPlan: Array<{
+    title: string;
+    detail: string;
+  }>;
 };
 
 const ASSET_TYPES: AccountType[] = [
@@ -103,15 +110,6 @@ const LIABILITY_TYPES: AccountType[] = [
   "other_liability",
 ];
 
-const QUICK_QUESTIONS = [
-  "Where did my money go this month?",
-  "Am I over budget?",
-  "How is my cash flow?",
-  "What are my top spending categories?",
-  "Am I on track with my goals?",
-  "What should I fix first?",
-];
-
 export default function InsightsPage() {
   const { showToast } = useToast();
 
@@ -119,103 +117,98 @@ export default function InsightsPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [budgetItems, setBudgetItems] = useState<BudgetItem[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
-  const [hasLoaded, setHasLoaded] = useState(false);
   const [userEmail, setUserEmail] = useState("");
+  const [hasLoaded, setHasLoaded] = useState(false);
 
-  const [question, setQuestion] = useState("");
-  const [answer, setAnswer] = useState("");
+  const [aiInsights, setAiInsights] = useState<AiInsightResponse | null>(null);
+  const [generating, setGenerating] = useState(false);
 
   useEffect(() => {
     async function initialize() {
-      try {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
 
-        if (!user) {
-          window.location.href = "/login";
-          return;
-        }
-
-        setUserEmail(user.email || "");
-
-        const [
-          accountsResponse,
-          transactionsResponse,
-          budgetResponse,
-          goalsResponse,
-        ] = await Promise.all([
-          supabase
-            .from("accounts")
-            .select("*")
-            .eq("user_id", user.id)
-            .order("created_at", { ascending: false }),
-
-          supabase
-            .from("transactions")
-            .select("*")
-            .eq("user_id", user.id)
-            .order("date", { ascending: false })
-            .order("created_at", { ascending: false }),
-
-          supabase
-            .from("budget_items")
-            .select("*")
-            .eq("user_id", user.id)
-            .order("category", { ascending: true }),
-
-          supabase
-            .from("goals")
-            .select("*")
-            .eq("user_id", user.id)
-            .order("created_at", { ascending: false }),
-        ]);
-
-        if (accountsResponse.error) {
-          showToast({
-            type: "error",
-            title: "Failed to load accounts",
-            message: accountsResponse.error.message,
-          });
-          return;
-        }
-
-        if (transactionsResponse.error) {
-          showToast({
-            type: "error",
-            title: "Failed to load transactions",
-            message: transactionsResponse.error.message,
-          });
-          return;
-        }
-
-        if (budgetResponse.error) {
-          showToast({
-            type: "error",
-            title: "Failed to load budget",
-            message: budgetResponse.error.message,
-          });
-          return;
-        }
-
-        if (goalsResponse.error) {
-          showToast({
-            type: "error",
-            title: "Failed to load goals",
-            message: goalsResponse.error.message,
-          });
-          return;
-        }
-
-        setAccounts((accountsResponse.data || []) as Account[]);
-        setTransactions((transactionsResponse.data || []) as Transaction[]);
-        setBudgetItems((budgetResponse.data || []) as BudgetItem[]);
-        setGoals((goalsResponse.data || []) as Goal[]);
-      } catch (error) {
-        console.error("Failed to load insights data:", error);
-      } finally {
-        setHasLoaded(true);
+      if (!user) {
+        window.location.href = "/login";
+        return;
       }
+
+      setUserEmail(user.email || "");
+
+      const [
+        accountsResponse,
+        transactionsResponse,
+        budgetResponse,
+        goalsResponse,
+      ] = await Promise.all([
+        supabase
+          .from("accounts")
+          .select("*")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false }),
+
+        supabase
+          .from("transactions")
+          .select("*")
+          .eq("user_id", user.id)
+          .order("date", { ascending: false })
+          .order("created_at", { ascending: false }),
+
+        supabase
+          .from("budget_items")
+          .select("*")
+          .eq("user_id", user.id)
+          .order("category", { ascending: true }),
+
+        supabase
+          .from("goals")
+          .select("*")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false }),
+      ]);
+
+      if (accountsResponse.error) {
+        showToast({
+          type: "error",
+          title: "Failed to load accounts",
+          message: accountsResponse.error.message,
+        });
+      } else {
+        setAccounts((accountsResponse.data || []) as Account[]);
+      }
+
+      if (transactionsResponse.error) {
+        showToast({
+          type: "error",
+          title: "Failed to load transactions",
+          message: transactionsResponse.error.message,
+        });
+      } else {
+        setTransactions((transactionsResponse.data || []) as Transaction[]);
+      }
+
+      if (budgetResponse.error) {
+        showToast({
+          type: "error",
+          title: "Failed to load budget",
+          message: budgetResponse.error.message,
+        });
+      } else {
+        setBudgetItems((budgetResponse.data || []) as BudgetItem[]);
+      }
+
+      if (goalsResponse.error) {
+        showToast({
+          type: "error",
+          title: "Failed to load goals",
+          message: goalsResponse.error.message,
+        });
+      } else {
+        setGoals((goalsResponse.data || []) as Goal[]);
+      }
+
+      setHasLoaded(true);
     }
 
     initialize();
@@ -242,29 +235,31 @@ export default function InsightsPage() {
     };
   }, [accounts]);
 
-  const monthlySummary = useMemo(() => {
-    const monthTransactions = transactions.filter((transaction) =>
+  const monthlyTransactions = useMemo(() => {
+    return transactions.filter((transaction) =>
       transaction.date.startsWith(currentMonth)
     );
+  }, [transactions, currentMonth]);
 
-    const income = monthTransactions
+  const monthlySummary = useMemo(() => {
+    const income = monthlyTransactions
       .filter((transaction) => transaction.transaction_type === "income")
       .reduce(
-        (sum, transaction) => sum + Math.abs(Number(transaction.amount)),
+        (sum, transaction) => sum + Math.abs(Number(transaction.amount || 0)),
         0
       );
 
-    const spending = monthTransactions
+    const spending = monthlyTransactions
       .filter((transaction) => transaction.transaction_type === "expense")
       .reduce(
-        (sum, transaction) => sum + Math.abs(Number(transaction.amount)),
+        (sum, transaction) => sum + Math.abs(Number(transaction.amount || 0)),
         0
       );
 
-    const transfers = monthTransactions
+    const transfers = monthlyTransactions
       .filter((transaction) => transaction.transaction_type === "transfer")
       .reduce(
-        (sum, transaction) => sum + Math.abs(Number(transaction.amount)),
+        (sum, transaction) => sum + Math.abs(Number(transaction.amount || 0)),
         0
       );
 
@@ -277,126 +272,241 @@ export default function InsightsPage() {
       transfers,
       cashFlow,
       savingsRate,
-      transactionCount: monthTransactions.length,
+      transactionCount: monthlyTransactions.length,
     };
-  }, [transactions, currentMonth]);
+  }, [monthlyTransactions]);
 
-  const spendingByCategory = useMemo(() => {
-    const map = new Map<string, number>();
+  const topSpendingCategories = useMemo(() => {
+    const categoryMap = new Map<string, number>();
 
-    transactions
-      .filter(
-        (transaction) =>
-          transaction.date.startsWith(currentMonth) &&
-          transaction.transaction_type === "expense"
-      )
+    monthlyTransactions
+      .filter((transaction) => transaction.transaction_type === "expense")
       .forEach((transaction) => {
-        map.set(
+        categoryMap.set(
           transaction.category,
-          (map.get(transaction.category) || 0) +
-            Math.abs(Number(transaction.amount))
+          (categoryMap.get(transaction.category) || 0) +
+            Math.abs(Number(transaction.amount || 0))
         );
       });
 
-    return Array.from(map.entries())
-      .map(([category, amount]) => ({ category, amount }))
-      .sort((a, b) => b.amount - a.amount);
-  }, [transactions, currentMonth]);
+    return Array.from(categoryMap.entries())
+      .map(([category, amount]) => ({
+        category,
+        amount,
+      }))
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 5);
+  }, [monthlyTransactions]);
 
   const budgetSummary = useMemo(() => {
+    const expenseTransactions = monthlyTransactions.filter(
+      (transaction) => transaction.transaction_type === "expense"
+    );
+
+    const spendingByCategory = new Map<string, number>();
+
+    expenseTransactions.forEach((transaction) => {
+      spendingByCategory.set(
+        transaction.category,
+        (spendingByCategory.get(transaction.category) || 0) +
+          Math.abs(Number(transaction.amount || 0))
+      );
+    });
+
     const totalPlanned = budgetItems.reduce(
       (sum, item) => sum + Number(item.planned_amount || 0),
       0
     );
 
-    const totalActual = monthlySummary.spending;
+    const totalActual = expenseTransactions.reduce(
+      (sum, transaction) => sum + Math.abs(Number(transaction.amount || 0)),
+      0
+    );
 
     const overBudgetCategories = budgetItems
       .map((item) => {
-        const actual =
-          spendingByCategory.find((row) => row.category === item.category)
-            ?.amount || 0;
+        const planned = Number(item.planned_amount || 0);
+        const actual = spendingByCategory.get(item.category) || 0;
 
         return {
           category: item.category,
-          planned: Number(item.planned_amount || 0),
+          planned,
           actual,
-          difference: Number(item.planned_amount || 0) - actual,
+          overBy: Math.max(actual - planned, 0),
         };
       })
-      .filter((row) => row.planned > 0 && row.actual > row.planned)
-      .sort((a, b) => a.difference - b.difference);
+      .filter((item) => item.planned > 0 && item.actual > item.planned)
+      .sort((a, b) => b.overBy - a.overBy);
 
     return {
       totalPlanned,
       totalActual,
-      remaining: totalPlanned - totalActual,
+      totalRemaining: totalPlanned - totalActual,
       overBudgetCategories,
     };
-  }, [budgetItems, spendingByCategory, monthlySummary.spending]);
+  }, [monthlyTransactions, budgetItems]);
 
   const goalSummary = useMemo(() => {
-    const totalTarget = goals.reduce(
-      (sum, goal) => sum + Number(goal.target_amount || 0),
+    const preparedGoals = goals.map((goal) => ({
+      name: goal.name,
+      targetAmount: Number(goal.target_amount || 0),
+      currentAmount: Number(goal.current_amount || 0),
+      remaining: Math.max(
+        Number(goal.target_amount || 0) - Number(goal.current_amount || 0),
+        0
+      ),
+      targetDate: goal.target_date,
+      monthlyContribution: Number(goal.monthly_contribution || 0),
+    }));
+
+    const totalTarget = preparedGoals.reduce(
+      (sum, goal) => sum + goal.targetAmount,
       0
     );
 
-    const totalCurrent = goals.reduce(
-      (sum, goal) => sum + Number(goal.current_amount || 0),
+    const totalCurrent = preparedGoals.reduce(
+      (sum, goal) => sum + goal.currentAmount,
       0
     );
-
-    const activeGoals = goals.filter(
-      (goal) => Number(goal.current_amount) < Number(goal.target_amount)
-    );
-
-    const progress =
-      totalTarget > 0 ? Math.min((totalCurrent / totalTarget) * 100, 100) : 0;
 
     return {
+      goals: preparedGoals,
       totalTarget,
       totalCurrent,
       remaining: Math.max(totalTarget - totalCurrent, 0),
-      activeGoals,
-      progress,
+      progress:
+        totalTarget > 0 ? Math.min((totalCurrent / totalTarget) * 100, 100) : 0,
     };
   }, [goals]);
 
-  const insights = useMemo(() => {
-    return generateInsights({
-      accountSummary,
-      monthlySummary,
-      budgetSummary,
-      goalSummary,
-      spendingByCategory,
-    });
-  }, [
-    accountSummary,
-    monthlySummary,
-    budgetSummary,
-    goalSummary,
-    spendingByCategory,
-  ]);
+  const ruleBasedInsights = useMemo(() => {
+    const insights: Array<{
+      title: string;
+      detail: string;
+      severity: "good" | "warning" | "danger" | "info";
+    }> = [];
 
-  function askQuestion(customQuestion?: string) {
-    const q = customQuestion || question;
-
-    if (!q.trim()) {
-      setAnswer("Ask a question first, or use one of the quick prompts.");
-      return;
+    if (monthlySummary.cashFlow >= 0) {
+      insights.push({
+        title: "Positive monthly cash flow",
+        detail: `You are cash-flow positive by ${formatCurrency(
+          monthlySummary.cashFlow
+        )} this month.`,
+        severity: "good",
+      });
+    } else {
+      insights.push({
+        title: "Negative monthly cash flow",
+        detail: `You are cash-flow negative by ${formatCurrency(
+          Math.abs(monthlySummary.cashFlow)
+        )} this month. Review flexible spending first.`,
+        severity: "danger",
+      });
     }
 
-    const response = generateAnswer(q, {
-      accountSummary,
-      monthlySummary,
-      budgetSummary,
-      goalSummary,
-      spendingByCategory,
-      currentMonth,
-    });
+    if (budgetSummary.totalPlanned === 0) {
+      insights.push({
+        title: "Budget setup needed",
+        detail:
+          "You have not set planned budget amounts yet. Add planned amounts to unlock better budget insights.",
+        severity: "warning",
+      });
+    } else if (budgetSummary.totalRemaining >= 0) {
+      insights.push({
+        title: "Budget is currently under control",
+        detail: `You have ${formatCurrency(
+          budgetSummary.totalRemaining
+        )} remaining against your planned budget.`,
+        severity: "good",
+      });
+    } else {
+      insights.push({
+        title: "Budget is over plan",
+        detail: `You are ${formatCurrency(
+          Math.abs(budgetSummary.totalRemaining)
+        )} over your planned budget.`,
+        severity: "warning",
+      });
+    }
 
-    setAnswer(response);
-    setQuestion(q);
+    if (topSpendingCategories.length > 0) {
+      insights.push({
+        title: "Largest spending category",
+        detail: `${topSpendingCategories[0].category} is your largest spending category this month at ${formatCurrency(
+          topSpendingCategories[0].amount
+        )}.`,
+        severity: "info",
+      });
+    }
+
+    if (goalSummary.goals.length === 0) {
+      insights.push({
+        title: "No goals yet",
+        detail:
+          "Add at least one financial goal so WealthOS can track progress and recommend next actions.",
+        severity: "info",
+      });
+    } else {
+      insights.push({
+        title: "Goal progress",
+        detail: `You are ${Math.round(
+          goalSummary.progress
+        )}% complete across all tracked goals.`,
+        severity: goalSummary.progress >= 50 ? "good" : "info",
+      });
+    }
+
+    return insights;
+  }, [monthlySummary, budgetSummary, topSpendingCategories, goalSummary]);
+
+  async function generateAiInsights() {
+    setGenerating(true);
+
+    const payload = {
+      netWorth: accountSummary.netWorth,
+      assets: accountSummary.assets,
+      liabilities: accountSummary.liabilities,
+      monthlyIncome: monthlySummary.income,
+      monthlySpending: monthlySummary.spending,
+      monthlyCashFlow: monthlySummary.cashFlow,
+      budgetPlanned: budgetSummary.totalPlanned,
+      budgetActual: budgetSummary.totalActual,
+      budgetRemaining: budgetSummary.totalRemaining,
+      overBudgetCategories: budgetSummary.overBudgetCategories.slice(0, 5),
+      topSpendingCategories,
+      goals: goalSummary.goals.slice(0, 8),
+      transactionCount: monthlySummary.transactionCount,
+    };
+
+    try {
+      const response = await fetch("/api/ai-insights", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = (await response.json()) as AiInsightResponse;
+
+      setAiInsights(data);
+
+      showToast({
+        type: "success",
+        title: "AI insights generated",
+        message: "Your latest WealthOS analysis is ready.",
+      });
+    } catch (error) {
+      console.error("Failed to generate AI insights:", error);
+
+      showToast({
+        type: "error",
+        title: "AI insights failed",
+        message: "Could not generate AI insights right now.",
+      });
+    } finally {
+      setGenerating(false);
+    }
   }
 
   if (!hasLoaded) {
@@ -419,550 +529,358 @@ export default function InsightsPage() {
 
       <div className="min-w-0 flex-1">
         <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-          <div className="mb-8">
-            <p className="text-sm text-slate-400">WealthOS MVP</p>
-            <h1 className="mt-2 text-3xl font-semibold">Insights</h1>
-            <p className="mt-1 text-sm text-slate-500">
-              Supabase-backed finance assistant using accounts, transactions,
-              budgets, and goals.
-            </p>
-            {userEmail && (
-              <p className="mt-1 text-xs text-slate-600">
-                Logged in as {userEmail}
-              </p>
-            )}
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-4">
-            <SummaryCard
-              title="Net Worth"
-              value={formatCurrency(accountSummary.netWorth)}
-            />
-            <SummaryCard
-              title="Monthly Cash Flow"
-              value={formatCurrency(monthlySummary.cashFlow)}
-            />
-            <SummaryCard
-              title="Savings Rate"
-              value={`${Math.round(monthlySummary.savingsRate)}%`}
-            />
-            <SummaryCard
-              title="Budget Remaining"
-              value={formatCurrency(budgetSummary.remaining)}
-            />
-          </div>
-
-          <div className="mt-8 grid gap-6 xl:grid-cols-[1fr_420px]">
-            <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-              <h2 className="text-lg font-medium">AI-Style Ask</h2>
-              <p className="mt-1 text-sm text-slate-400">
-                This currently uses a local rules engine over your Supabase data.
-                Later we can connect this to a real AI API endpoint.
-              </p>
-
-              <div className="mt-5">
-                <textarea
-                  value={question}
-                  onChange={(event) => setQuestion(event.target.value)}
-                  rows={4}
-                  placeholder="Ask something like: Where did my money go this month?"
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm outline-none focus:border-blue-500"
-                />
-
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => askQuestion()}
-                    className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium hover:bg-blue-500"
-                  >
-                    Ask
-                  </button>
-
-                  {QUICK_QUESTIONS.map((item) => (
-                    <button
-                      key={item}
-                      type="button"
-                      onClick={() => askQuestion(item)}
-                      className="rounded-xl border border-slate-700 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800"
-                    >
-                      {item}
-                    </button>
-                  ))}
-                </div>
+          <section className="overflow-hidden rounded-3xl border border-slate-800 bg-gradient-to-br from-slate-900 via-slate-900 to-blue-950/50 p-6 md:p-8">
+            <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
+              <div>
+                <p className="text-sm text-blue-300">WealthOS Intelligence</p>
+                <h1 className="mt-2 text-3xl font-semibold tracking-tight md:text-4xl">
+                  Insights
+                </h1>
+                <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-400">
+                  Review your financial snapshot, rule-based insights, and
+                  AI-generated analysis from your Supabase data.
+                </p>
               </div>
 
-              {answer && (
-                <div className="mt-6 rounded-2xl border border-blue-900 bg-blue-950/30 p-5">
-                  <p className="text-sm font-medium text-blue-200">Answer</p>
-                  <div className="mt-3 whitespace-pre-line text-sm leading-6 text-blue-50/90">
-                    {answer}
-                  </div>
-                </div>
-              )}
+              <button
+                type="button"
+                onClick={generateAiInsights}
+                disabled={generating}
+                className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-60"
+              >
+                {generating ? "Generating..." : "Generate AI Insights"}
+              </button>
+            </div>
+          </section>
 
-              <div className="mt-8">
-                <h2 className="text-lg font-medium">Generated Insights</h2>
+          <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <MetricCard
+              title="Net Worth"
+              value={formatCurrency(accountSummary.netWorth)}
+              subtitle={`${formatCurrency(accountSummary.assets)} assets`}
+              tone={accountSummary.netWorth >= 0 ? "good" : "danger"}
+            />
+
+            <MetricCard
+              title="Monthly Cash Flow"
+              value={formatCurrency(monthlySummary.cashFlow)}
+              subtitle={`${formatCurrency(monthlySummary.income)} income`}
+              tone={monthlySummary.cashFlow >= 0 ? "good" : "danger"}
+            />
+
+            <MetricCard
+              title="Budget Remaining"
+              value={formatCurrency(budgetSummary.totalRemaining)}
+              subtitle={`${formatCurrency(
+                budgetSummary.totalActual
+              )} actual spending`}
+              tone={budgetSummary.totalRemaining >= 0 ? "good" : "warning"}
+            />
+
+            <MetricCard
+              title="Goal Progress"
+              value={`${Math.round(goalSummary.progress)}%`}
+              subtitle={`${formatCurrency(goalSummary.remaining)} remaining`}
+              tone={goalSummary.progress >= 50 ? "good" : "info"}
+            />
+          </section>
+
+          <section className="mt-6 grid gap-6 xl:grid-cols-[1fr_420px]">
+            <div className="space-y-6">
+              <section className="rounded-3xl border border-slate-800 bg-slate-900 p-5">
+                <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <h2 className="text-lg font-medium">AI Analysis</h2>
+                    <p className="text-sm text-slate-400">
+                      Generated from your current accounts, transactions,
+                      budgets, and goals.
+                    </p>
+                  </div>
+
+                  {aiInsights && (
+                    <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-xs text-emerald-300">
+                      Generated
+                    </span>
+                  )}
+                </div>
+
+                {!aiInsights ? (
+                  <div className="rounded-2xl border border-slate-800 bg-slate-950 p-8 text-center">
+                    <p className="text-sm font-medium text-slate-200">
+                      No AI insights generated yet
+                    </p>
+                    <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-slate-500">
+                      Click Generate AI Insights to create a concise analysis.
+                      If no OpenAI key is configured, WealthOS will return a
+                      safe rule-based fallback.
+                    </p>
+
+                    <button
+                      type="button"
+                      onClick={generateAiInsights}
+                      disabled={generating}
+                      className="mt-5 rounded-xl bg-blue-600 px-5 py-3 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-60"
+                    >
+                      {generating ? "Generating..." : "Generate AI Insights"}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-5">
+                    <div className="rounded-2xl border border-blue-900 bg-blue-950/30 p-5">
+                      <p className="text-sm font-medium text-blue-200">
+                        Summary
+                      </p>
+                      <p className="mt-2 text-sm leading-6 text-blue-100/80">
+                        {aiInsights.summary}
+                      </p>
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-2">
+                      {aiInsights.insights.map((insight) => (
+                        <InsightCard
+                          key={insight.title}
+                          title={insight.title}
+                          detail={insight.detail}
+                          severity={insight.severity}
+                        />
+                      ))}
+                    </div>
+
+                    <div className="rounded-2xl border border-slate-800 bg-slate-950 p-5">
+                      <h3 className="text-sm font-medium text-slate-200">
+                        Action Plan
+                      </h3>
+
+                      <div className="mt-4 space-y-3">
+                        {aiInsights.actionPlan.map((action, index) => (
+                          <div
+                            key={`${action.title}-${index}`}
+                            className="rounded-2xl border border-slate-800 bg-slate-900 p-4"
+                          >
+                            <p className="text-sm font-medium text-slate-200">
+                              {index + 1}. {action.title}
+                            </p>
+                            <p className="mt-1 text-sm leading-6 text-slate-400">
+                              {action.detail}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </section>
+
+              <section className="rounded-3xl border border-slate-800 bg-slate-900 p-5">
+                <h2 className="text-lg font-medium">Rule-Based Insights</h2>
                 <p className="mt-1 text-sm text-slate-400">
-                  Automatically generated from your current Supabase data.
+                  Always available, even without an AI API key.
                 </p>
 
                 <div className="mt-5 grid gap-4 md:grid-cols-2">
-                  {insights.map((insight) => (
-                    <InsightCard key={insight.title} insight={insight} />
+                  {ruleBasedInsights.map((insight) => (
+                    <InsightCard
+                      key={insight.title}
+                      title={insight.title}
+                      detail={insight.detail}
+                      severity={insight.severity}
+                    />
                   ))}
                 </div>
-              </div>
-            </section>
+              </section>
+            </div>
 
             <aside className="space-y-6">
-              <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+              <section className="rounded-3xl border border-slate-800 bg-slate-900 p-5">
+                <h2 className="text-lg font-medium">Data Readiness</h2>
+                <p className="mt-1 text-sm text-slate-400">
+                  More complete data creates better insights.
+                </p>
+
+                <div className="mt-5 space-y-4">
+                  <ReadinessRow
+                    label="Accounts"
+                    value={`${accountSummary.activeAccounts} active`}
+                    complete={accountSummary.activeAccounts > 0}
+                    href="/accounts"
+                  />
+                  <ReadinessRow
+                    label="Transactions"
+                    value={`${monthlySummary.transactionCount} this month`}
+                    complete={monthlySummary.transactionCount > 0}
+                    href="/transactions"
+                  />
+                  <ReadinessRow
+                    label="Budgets"
+                    value={`${budgetItems.length} categories`}
+                    complete={budgetItems.length > 0}
+                    href="/budgets"
+                  />
+                  <ReadinessRow
+                    label="Goals"
+                    value={`${goals.length} tracked`}
+                    complete={goals.length > 0}
+                    href="/goals"
+                  />
+                </div>
+              </section>
+
+              <section className="rounded-3xl border border-slate-800 bg-slate-900 p-5">
                 <h2 className="text-lg font-medium">Top Spending</h2>
+                <p className="mt-1 text-sm text-slate-400">
+                  Largest expense categories this month.
+                </p>
 
-                <div className="mt-5 space-y-4">
-                  {spendingByCategory.slice(0, 6).map((row) => (
-                    <div key={row.category}>
-                      <div className="mb-1 flex justify-between text-sm">
-                        <span className="text-slate-300">{row.category}</span>
-                        <span className="font-medium">
-                          {formatCurrency(row.amount)}
-                        </span>
+                {topSpendingCategories.length === 0 ? (
+                  <p className="mt-5 text-sm text-slate-500">
+                    No expense transactions this month yet.
+                  </p>
+                ) : (
+                  <div className="mt-5 space-y-4">
+                    {topSpendingCategories.map((row) => (
+                      <div key={row.category}>
+                        <div className="mb-1 flex justify-between gap-3 text-sm">
+                          <span className="break-words text-slate-300">
+                            {row.category}
+                          </span>
+                          <span className="shrink-0 font-medium text-slate-200">
+                            {formatCurrency(row.amount)}
+                          </span>
+                        </div>
+                        <div className="h-2 rounded-full bg-slate-800">
+                          <div
+                            className="h-2 rounded-full bg-blue-500"
+                            style={{
+                              width: `${getCategoryPercent(
+                                row.amount,
+                                monthlySummary.spending
+                              )}%`,
+                            }}
+                          />
+                        </div>
                       </div>
-                      <div className="h-2 rounded-full bg-slate-800">
-                        <div
-                          className="h-2 rounded-full bg-blue-500"
-                          style={{
-                            width: `${getCategoryPercent(
-                              row.amount,
-                              monthlySummary.spending
-                            )}%`,
-                          }}
-                        />
-                      </div>
-                    </div>
-                  ))}
-
-                  {spendingByCategory.length === 0 && (
-                    <p className="text-sm text-slate-500">
-                      No spending data for this month yet.
-                    </p>
-                  )}
-                </div>
+                    ))}
+                  </div>
+                )}
               </section>
 
-              <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-                <h2 className="text-lg font-medium">Financial Snapshot</h2>
+              <section className="rounded-3xl border border-slate-800 bg-slate-900 p-5">
+                <h2 className="text-lg font-medium">Quick Actions</h2>
 
-                <div className="mt-5 space-y-4">
-                  <MiniMetric
-                    label="Income"
-                    value={formatCurrency(monthlySummary.income)}
+                <div className="mt-5 grid gap-3">
+                  <QuickAction href="/accounts" label="Update Accounts" />
+                  <QuickAction
+                    href="/transactions"
+                    label="Add Transactions"
                   />
-                  <MiniMetric
-                    label="Spending"
-                    value={formatCurrency(monthlySummary.spending)}
-                  />
-                  <MiniMetric
-                    label="Cash Flow"
-                    value={formatCurrency(monthlySummary.cashFlow)}
-                    valueClass={
-                      monthlySummary.cashFlow >= 0
-                        ? "text-emerald-300"
-                        : "text-red-300"
-                    }
-                  />
-                  <MiniMetric
-                    label="Budget Planned"
-                    value={formatCurrency(budgetSummary.totalPlanned)}
-                  />
-                  <MiniMetric
-                    label="Goal Remaining"
-                    value={formatCurrency(goalSummary.remaining)}
-                  />
-                </div>
-              </section>
-
-              <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-                <h2 className="text-lg font-medium">MVP Status</h2>
-                <div className="mt-5 space-y-3 text-sm text-slate-300">
-                  <StatusRow label="Auth" />
-                  <StatusRow label="Accounts" />
-                  <StatusRow label="Transactions" />
-                  <StatusRow label="Budgets" />
-                  <StatusRow label="Goals" />
-                  <StatusRow label="Insights" />
-                </div>
-
-                <div className="mt-6 rounded-xl border border-blue-900 bg-blue-950/30 p-4">
-                  <p className="text-sm font-medium text-blue-200">
-                    Recommended next step
-                  </p>
-                  <p className="mt-1 text-sm text-blue-100/80">
-                    After this polish sprint passes local build, merge and push
-                    to production.
-                  </p>
+                  <QuickAction href="/budgets" label="Review Budgets" />
+                  <QuickAction href="/goals" label="Update Goals" />
                 </div>
               </section>
             </aside>
-          </div>
+          </section>
         </div>
       </div>
     </main>
   );
 }
 
-function generateInsights({
-  accountSummary,
-  monthlySummary,
-  budgetSummary,
-  goalSummary,
-  spendingByCategory,
+function MetricCard({
+  title,
+  value,
+  subtitle,
+  tone = "info",
 }: {
-  accountSummary: {
-    assets: number;
-    liabilities: number;
-    netWorth: number;
-    activeAccounts: number;
-  };
-  monthlySummary: {
-    income: number;
-    spending: number;
-    cashFlow: number;
-    savingsRate: number;
-    transactionCount: number;
-  };
-  budgetSummary: {
-    totalPlanned: number;
-    totalActual: number;
-    remaining: number;
-    overBudgetCategories: {
-      category: string;
-      planned: number;
-      actual: number;
-      difference: number;
-    }[];
-  };
-  goalSummary: {
-    totalTarget: number;
-    totalCurrent: number;
-    remaining: number;
-    activeGoals: Goal[];
-    progress: number;
-  };
-  spendingByCategory: { category: string; amount: number }[];
-}): Insight[] {
-  const insights: Insight[] = [];
-
-  if (monthlySummary.income === 0) {
-    insights.push({
-      title: "No income recorded",
-      severity: "warning",
-      message:
-        "There is no income transaction recorded for this month, so savings rate and cash flow may be incomplete.",
-      action: "Add your paycheck or income transactions.",
-    });
-  }
-
-  if (monthlySummary.cashFlow < 0) {
-    insights.push({
-      title: "Negative cash flow",
-      severity: "danger",
-      message: `You spent ${formatCurrency(
-        Math.abs(monthlySummary.cashFlow)
-      )} more than your income this month.`,
-      action: "Review top spending categories and reduce flexible expenses.",
-    });
-  } else if (monthlySummary.savingsRate >= 20) {
-    insights.push({
-      title: "Strong savings rate",
-      severity: "good",
-      message: `Your estimated savings rate is ${Math.round(
-        monthlySummary.savingsRate
-      )}%, which is strong.`,
-      action: "Consider directing extra cash flow toward goals or investments.",
-    });
-  } else if (monthlySummary.income > 0) {
-    insights.push({
-      title: "Low savings rate",
-      severity: "warning",
-      message: `Your estimated savings rate is ${Math.round(
-        monthlySummary.savingsRate
-      )}%.`,
-      action: "Try to push savings rate toward 15–25% over time.",
-    });
-  }
-
-  if (budgetSummary.totalPlanned === 0) {
-    insights.push({
-      title: "Budget not planned",
-      severity: "info",
-      message: "You have not entered planned budget amounts yet.",
-      action: "Go to Budgets and set targets for major categories.",
-    });
-  } else if (budgetSummary.remaining < 0) {
-    insights.push({
-      title: "Budget exceeded",
-      severity: "danger",
-      message: `You are ${formatCurrency(
-        Math.abs(budgetSummary.remaining)
-      )} over your planned monthly budget.`,
-      action: "Check over-budget categories and reduce spending this week.",
-    });
-  } else {
-    insights.push({
-      title: "Budget has room",
-      severity: "good",
-      message: `You have ${formatCurrency(
-        budgetSummary.remaining
-      )} remaining in your planned monthly budget.`,
-      action: "Keep tracking spending before making large purchases.",
-    });
-  }
-
-  if (budgetSummary.overBudgetCategories.length > 0) {
-    const top = budgetSummary.overBudgetCategories[0];
-
-    insights.push({
-      title: "Top over-budget category",
-      severity: "warning",
-      message: `${top.category} is over budget by ${formatCurrency(
-        Math.abs(top.difference)
-      )}.`,
-      action: `Review recent ${top.category} transactions.`,
-    });
-  }
-
-  if (spendingByCategory.length > 0) {
-    const top = spendingByCategory[0];
-
-    insights.push({
-      title: "Largest spending category",
-      severity: "info",
-      message: `${top.category} is your largest spending category this month at ${formatCurrency(
-        top.amount
-      )}.`,
-      action: "Decide whether this category is intentional or needs a cap.",
-    });
-  }
-
-  if (goalSummary.totalTarget === 0) {
-    insights.push({
-      title: "No goals created",
-      severity: "info",
-      message: "You have not created any financial goals yet.",
-      action:
-        "Create an emergency fund, debt payoff, investment, or purchase goal.",
-    });
-  } else if (goalSummary.progress >= 50) {
-    insights.push({
-      title: "Goals progressing well",
-      severity: "good",
-      message: `You are ${Math.round(
-        goalSummary.progress
-      )}% complete across your goals.`,
-      action: "Keep monthly contributions consistent.",
-    });
-  } else {
-    insights.push({
-      title: "Goals need funding",
-      severity: "warning",
-      message: `You are ${Math.round(
-        goalSummary.progress
-      )}% complete across your goals.`,
-      action: "Link goal contributions to your monthly cash flow plan.",
-    });
-  }
-
-  if (accountSummary.liabilities > accountSummary.assets * 0.5) {
-    insights.push({
-      title: "Debt load looks high",
-      severity: "warning",
-      message: `Liabilities are ${formatCurrency(
-        accountSummary.liabilities
-      )}, compared with assets of ${formatCurrency(accountSummary.assets)}.`,
-      action: "Prioritize high-interest debt payoff before lifestyle upgrades.",
-    });
-  }
-
-  return insights;
-}
-
-function generateAnswer(
-  question: string,
-  data: {
-    accountSummary: {
-      assets: number;
-      liabilities: number;
-      netWorth: number;
-      activeAccounts: number;
-    };
-    monthlySummary: {
-      income: number;
-      spending: number;
-      cashFlow: number;
-      savingsRate: number;
-      transactionCount: number;
-    };
-    budgetSummary: {
-      totalPlanned: number;
-      totalActual: number;
-      remaining: number;
-      overBudgetCategories: {
-        category: string;
-        planned: number;
-        actual: number;
-        difference: number;
-      }[];
-    };
-    goalSummary: {
-      totalTarget: number;
-      totalCurrent: number;
-      remaining: number;
-      activeGoals: Goal[];
-      progress: number;
-    };
-    spendingByCategory: { category: string; amount: number }[];
-    currentMonth: string;
-  }
-) {
-  const q = question.toLowerCase();
-
-  if (q.includes("where") || q.includes("money") || q.includes("spending")) {
-    const topCategories = data.spendingByCategory
-      .slice(0, 5)
-      .map(
-        (row, index) =>
-          `${index + 1}. ${row.category}: ${formatCurrency(row.amount)}`
-      )
-      .join("\n");
-
-    return `For ${data.currentMonth}, your spending is ${formatCurrency(
-      data.monthlySummary.spending
-    )}.\n\nTop categories:\n${
-      topCategories || "No spending categories yet."
-    }\n\nYour income is ${formatCurrency(
-      data.monthlySummary.income
-    )}, so your current cash flow is ${formatCurrency(
-      data.monthlySummary.cashFlow
-    )}.\n\nRecommended action: focus on the top 1–2 flexible categories first.`;
-  }
-
-  if (q.includes("budget")) {
-    if (data.budgetSummary.totalPlanned === 0) {
-      return "You have not set a planned budget yet. Go to Budgets and enter planned amounts for major categories like rent, groceries, restaurants, fuel, subscriptions, shopping, and insurance.";
-    }
-
-    const overBudgetText =
-      data.budgetSummary.overBudgetCategories.length > 0
-        ? data.budgetSummary.overBudgetCategories
-            .slice(0, 3)
-            .map(
-              (row) =>
-                `${row.category}: over by ${formatCurrency(
-                  Math.abs(row.difference)
-                )}`
-            )
-            .join("\n")
-        : "No categories are over budget.";
-
-    return `Your planned budget is ${formatCurrency(
-      data.budgetSummary.totalPlanned
-    )} and actual spending is ${formatCurrency(
-      data.budgetSummary.totalActual
-    )}.\n\nRemaining budget: ${formatCurrency(
-      data.budgetSummary.remaining
-    )}\n\nOver-budget categories:\n${overBudgetText}`;
-  }
-
-  if (q.includes("cash flow") || q.includes("cashflow")) {
-    return `Your monthly income is ${formatCurrency(
-      data.monthlySummary.income
-    )} and spending is ${formatCurrency(
-      data.monthlySummary.spending
-    )}.\n\nYour cash flow is ${formatCurrency(
-      data.monthlySummary.cashFlow
-    )}.\n\nEstimated savings rate: ${Math.round(
-      data.monthlySummary.savingsRate
-    )}%.\n\n${
-      data.monthlySummary.cashFlow >= 0
-        ? "You are cash-flow positive. Consider directing surplus toward goals, debt payoff, or investments."
-        : "You are cash-flow negative. Reduce flexible spending or increase income before taking on new commitments."
-    }`;
-  }
-
-  if (q.includes("goal")) {
-    if (data.goalSummary.totalTarget === 0) {
-      return "You have not created goals yet. Start with an emergency fund, then add debt payoff, investment, or large purchase goals.";
-    }
-
-    return `Your total goal target is ${formatCurrency(
-      data.goalSummary.totalTarget
-    )}.\n\nCurrent progress: ${formatCurrency(
-      data.goalSummary.totalCurrent
-    )}\nRemaining: ${formatCurrency(
-      data.goalSummary.remaining
-    )}\nOverall progress: ${Math.round(
-      data.goalSummary.progress
-    )}%.\n\nRecommended action: use positive monthly cash flow to fund the highest-priority goal first.`;
-  }
-
-  if (q.includes("fix") || q.includes("first") || q.includes("priority")) {
-    if (data.monthlySummary.cashFlow < 0) {
-      return `First priority: fix negative cash flow. You are currently at ${formatCurrency(
-        data.monthlySummary.cashFlow
-      )} for the month.\n\nAction: reduce top flexible spending categories before adding new goals or purchases.`;
-    }
-
-    if (data.budgetSummary.remaining < 0) {
-      return `First priority: fix budget overrun. You are over budget by ${formatCurrency(
-        Math.abs(data.budgetSummary.remaining)
-      )}.\n\nAction: review over-budget categories and adjust spending.`;
-    }
-
-    if (data.goalSummary.totalTarget === 0) {
-      return "First priority: create goals. You have cash-flow/budget visibility, but no goal system yet. Add emergency fund and investment goals.";
-    }
-
-    return "First priority: keep the system updated weekly. Your cash flow and budget are the control center; goals should be funded from your monthly surplus.";
-  }
-
-  return `Based on your current Supabase data:\n\nNet worth: ${formatCurrency(
-    data.accountSummary.netWorth
-  )}\nMonthly income: ${formatCurrency(
-    data.monthlySummary.income
-  )}\nMonthly spending: ${formatCurrency(
-    data.monthlySummary.spending
-  )}\nCash flow: ${formatCurrency(
-    data.monthlySummary.cashFlow
-  )}\nBudget remaining: ${formatCurrency(
-    data.budgetSummary.remaining
-  )}\nGoal progress: ${Math.round(
-    data.goalSummary.progress
-  )}%\n\nAsk a more specific question like “Am I over budget?” or “What should I fix first?”`;
-}
-
-function InsightCard({ insight }: { insight: Insight }) {
+  title: string;
+  value: string;
+  subtitle: string;
+  tone?: "good" | "warning" | "danger" | "info";
+}) {
   return (
-    <div
-      className={`rounded-2xl border p-5 ${getInsightClass(
-        insight.severity
-      )}`}
-    >
+    <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5">
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-sm font-medium">{insight.title}</p>
-          <p className="mt-2 text-sm opacity-90">{insight.message}</p>
+        <div className="min-w-0">
+          <p className="text-sm text-slate-400">{title}</p>
+          <p className="mt-2 break-words text-2xl font-semibold">{value}</p>
+          <p className="mt-1 text-xs text-slate-500">{subtitle}</p>
         </div>
-        <span className="rounded-full bg-black/20 px-2 py-1 text-xs capitalize">
-          {insight.severity}
-        </span>
-      </div>
 
-      <p className="mt-4 text-sm font-medium">Action: {insight.action}</p>
+        <span className={`mt-1 h-3 w-3 shrink-0 rounded-full ${toneClass(tone)}`} />
+      </div>
     </div>
   );
 }
 
-function getInsightClass(severity: Insight["severity"]) {
+function InsightCard({
+  title,
+  detail,
+  severity,
+}: {
+  title: string;
+  detail: string;
+  severity: "good" | "warning" | "danger" | "info";
+}) {
+  return (
+    <div className={`rounded-2xl border p-5 ${insightClass(severity)}`}>
+      <p className="text-sm font-medium">{title}</p>
+      <p className="mt-2 text-sm leading-6 opacity-85">{detail}</p>
+    </div>
+  );
+}
+
+function ReadinessRow({
+  label,
+  value,
+  complete,
+  href,
+}: {
+  label: string;
+  value: string;
+  complete: boolean;
+  href: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className="flex items-center justify-between gap-4 rounded-2xl border border-slate-800 bg-slate-950 p-4 hover:bg-slate-900"
+    >
+      <div>
+        <p className="text-sm font-medium text-slate-200">{label}</p>
+        <p className="mt-1 text-xs text-slate-500">{value}</p>
+      </div>
+
+      <span
+        className={
+          complete
+            ? "rounded-full bg-emerald-500/10 px-2 py-1 text-xs text-emerald-300"
+            : "rounded-full bg-amber-500/10 px-2 py-1 text-xs text-amber-300"
+        }
+      >
+        {complete ? "Ready" : "Needs data"}
+      </span>
+    </Link>
+  );
+}
+
+function QuickAction({ href, label }: { href: string; label: string }) {
+  return (
+    <Link
+      href={href}
+      className="rounded-xl border border-slate-700 px-4 py-3 text-sm text-slate-300 hover:bg-slate-800"
+    >
+      {label}
+    </Link>
+  );
+}
+
+function toneClass(tone: "good" | "warning" | "danger" | "info") {
+  if (tone === "good") return "bg-emerald-400";
+  if (tone === "warning") return "bg-amber-400";
+  if (tone === "danger") return "bg-red-400";
+  return "bg-blue-400";
+}
+
+function insightClass(severity: "good" | "warning" | "danger" | "info") {
   if (severity === "good") {
     return "border-emerald-900 bg-emerald-950/30 text-emerald-100";
   }
@@ -981,43 +899,6 @@ function getInsightClass(severity: Insight["severity"]) {
 function getCategoryPercent(amount: number, total: number) {
   if (total <= 0) return 0;
   return Math.min((amount / total) * 100, 100);
-}
-
-function SummaryCard({ title, value }: { title: string; value: string }) {
-  return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-      <p className="text-sm text-slate-400">{title}</p>
-      <p className="mt-2 text-2xl font-semibold">{value}</p>
-    </div>
-  );
-}
-
-function MiniMetric({
-  label,
-  value,
-  valueClass = "text-slate-200",
-}: {
-  label: string;
-  value: string;
-  valueClass?: string;
-}) {
-  return (
-    <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-      <span className="text-sm text-slate-400">{label}</span>
-      <span className={`text-sm font-medium ${valueClass}`}>{value}</span>
-    </div>
-  );
-}
-
-function StatusRow({ label }: { label: string }) {
-  return (
-    <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-      <span>{label}</span>
-      <span className="rounded-full bg-emerald-500/10 px-2 py-1 text-xs text-emerald-300">
-        Done
-      </span>
-    </div>
-  );
 }
 
 function formatCurrency(value: number) {
