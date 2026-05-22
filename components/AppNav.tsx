@@ -59,108 +59,200 @@ export default function AppNav({ userEmail }: { userEmail?: string }) {
   }
 
   return (
-    <aside
-      className={
-        isCollapsed
-          ? "w-full shrink-0 border-b border-slate-800 bg-slate-950/95 text-white backdrop-blur transition-all duration-200 md:sticky md:top-0 md:h-screen md:w-24 md:border-b-0 md:border-r"
-          : "w-full shrink-0 border-b border-slate-800 bg-slate-950/95 text-white backdrop-blur transition-all duration-200 md:sticky md:top-0 md:h-screen md:w-72 md:border-b-0 md:border-r"
-      }
-    >
-      <div className="flex h-full flex-col">
-        <div
-          className={
-            isCollapsed
-              ? "flex items-center justify-between px-4 py-4 md:block md:px-3 md:py-6"
-              : "flex items-center justify-between px-4 py-4 md:block md:px-5 md:py-6"
-          }
-        >
+    <>
+      <aside
+        className={
+          isCollapsed
+            ? "hidden shrink-0 border-r border-slate-800 bg-slate-950/95 text-white backdrop-blur transition-all duration-200 md:sticky md:top-0 md:flex md:h-screen md:w-24"
+            : "hidden shrink-0 border-r border-slate-800 bg-slate-950/95 text-white backdrop-blur transition-all duration-200 md:sticky md:top-0 md:flex md:h-screen md:w-72"
+        }
+      >
+        <div className="flex h-full w-full flex-col">
           <div
             className={
               isCollapsed
-                ? "flex items-center gap-3 md:flex-col md:gap-4"
-                : "flex items-center gap-3 md:block"
+                ? "px-3 py-6"
+                : "px-5 py-6"
             }
           >
-            <Link
-              href="/"
+            <div
               className={
                 isCollapsed
-                  ? "group flex items-center justify-center md:w-full"
-                  : "group block"
+                  ? "flex flex-col items-center gap-4"
+                  : "block"
               }
-              title="WealthOS"
             >
-              <div
+              <Link
+                href="/"
                 className={
                   isCollapsed
-                    ? "flex items-center justify-center gap-3 md:flex-col"
-                    : "flex items-center gap-3"
+                    ? "group flex w-full items-center justify-center"
+                    : "group block"
+                }
+                title="WealthOS"
+              >
+                <div
+                  className={
+                    isCollapsed
+                      ? "flex items-center justify-center"
+                      : "flex items-center gap-3"
+                  }
+                >
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-blue-900 bg-blue-950 text-lg font-semibold text-blue-300 shadow-sm">
+                    W
+                  </div>
+
+                  {!isCollapsed && (
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold tracking-tight text-white">
+                        WealthOS
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        Personal finance OS
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </Link>
+
+              <button
+                type="button"
+                onClick={toggleSidebar}
+                title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+                aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+                className={
+                  isCollapsed
+                    ? "flex h-10 w-10 items-center justify-center rounded-xl border border-slate-800 text-slate-400 hover:bg-slate-900 hover:text-white"
+                    : "mt-5 flex h-10 w-10 items-center justify-center rounded-xl border border-slate-800 text-slate-400 hover:bg-slate-900 hover:text-white"
                 }
               >
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-blue-900 bg-blue-950 text-lg font-semibold text-blue-300 shadow-sm">
-                  W
-                </div>
-
-                {!isCollapsed && (
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold tracking-tight text-white">
-                      WealthOS
-                    </p>
-                    <p className="text-xs text-slate-500">
-                      Personal finance OS
-                    </p>
-                  </div>
-                )}
-              </div>
-            </Link>
-
-            <button
-              type="button"
-              onClick={toggleSidebar}
-              title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-              aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-              className={
-                isCollapsed
-                  ? "hidden h-10 w-10 items-center justify-center rounded-xl border border-slate-800 text-slate-400 hover:bg-slate-900 hover:text-white md:flex"
-                  : "hidden h-10 w-10 items-center justify-center rounded-xl border border-slate-800 text-slate-400 hover:bg-slate-900 hover:text-white md:mt-5 md:flex"
-              }
-            >
-              <SidebarToggleIcon collapsed={isCollapsed} />
-            </button>
+                <SidebarToggleIcon collapsed={isCollapsed} />
+              </button>
+            </div>
           </div>
 
-          <button
-            type="button"
-            onClick={logout}
-            className="rounded-xl border border-red-900 px-3 py-2 text-xs text-red-300 hover:bg-red-950 md:hidden"
-          >
-            Logout
-          </button>
-        </div>
+          {!isCollapsed && (
+            <div className="px-5">
+              {userEmail && (
+                <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+                  <p className="text-xs text-slate-500">Signed in as</p>
+                  <p className="mt-1 truncate text-sm text-slate-300">
+                    {displayName}
+                  </p>
+                  <p className="mt-1 truncate text-xs text-slate-600">
+                    {userEmail}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
 
-        {!isCollapsed && (
-          <div className="hidden px-5 md:block">
-            {userEmail && (
+          <nav
+            className={
+              isCollapsed
+                ? "mt-6 space-y-2 px-3"
+                : "mt-6 space-y-1 px-5"
+            }
+          >
+            {NAV_ITEMS.map((item) => {
+              const isActive =
+                item.href === "/"
+                  ? pathname === "/"
+                  : pathname.startsWith(item.href);
+
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  title={isCollapsed ? item.label : undefined}
+                  className={
+                    isCollapsed
+                      ? isActive
+                        ? "flex w-full items-center justify-center rounded-xl bg-blue-600 px-0 py-2.5 text-sm font-medium text-white shadow-sm"
+                        : "flex w-full items-center justify-center rounded-xl px-0 py-2.5 text-sm text-slate-300 hover:bg-slate-900 hover:text-white"
+                      : isActive
+                      ? "flex w-full items-center gap-3 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm"
+                      : "flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-900 hover:text-white"
+                  }
+                >
+                  <span
+                    className={
+                      isActive
+                        ? "flex h-6 w-6 items-center justify-center rounded-lg bg-white/15 text-xs"
+                        : "flex h-6 w-6 items-center justify-center rounded-lg bg-slate-900 text-xs text-slate-500"
+                    }
+                  >
+                    {item.icon}
+                  </span>
+
+                  {!isCollapsed && <span>{item.label}</span>}
+                </Link>
+              );
+            })}
+          </nav>
+
+          <div
+            className={
+              isCollapsed
+                ? "mt-auto px-3 pb-6"
+                : "mt-auto px-5 pb-6"
+            }
+          >
+            {isCollapsed ? (
+              <div className="flex flex-col items-center gap-3">
+                <div
+                  title={firstName}
+                  className="flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-800 bg-slate-900 text-sm font-semibold text-blue-300"
+                >
+                  {firstInitial}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={logout}
+                  className="flex h-10 w-10 items-center justify-center rounded-xl border border-red-900 text-sm text-red-300 hover:bg-red-950"
+                  title="Logout"
+                  aria-label="Logout"
+                >
+                  ⎋
+                </button>
+              </div>
+            ) : (
               <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-                <p className="text-xs text-slate-500">Signed in as</p>
-                <p className="mt-1 truncate text-sm text-slate-300">
-                  {displayName}
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-600 text-sm font-semibold text-white">
+                    {firstInitial}
+                  </div>
+
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-slate-200">
+                      {firstName}
+                    </p>
+                    <p className="truncate text-xs text-slate-500">
+                      Private beta
+                    </p>
+                  </div>
+                </div>
+
+                <p className="mt-4 text-xs leading-5 text-slate-500">
+                  Manual tracking is active. Bank sync and AI insights come next.
                 </p>
-                <p className="mt-1 truncate text-xs text-slate-600">
-                  {userEmail}
-                </p>
+
+                <button
+                  type="button"
+                  onClick={logout}
+                  className="mt-4 w-full rounded-xl border border-red-900 px-4 py-2 text-sm text-red-300 hover:bg-red-950"
+                >
+                  Logout
+                </button>
               </div>
             )}
           </div>
-        )}
+        </div>
+      </aside>
 
-        <nav
-          className={
-            isCollapsed
-              ? "flex gap-2 overflow-x-auto px-4 pb-4 md:mt-6 md:block md:space-y-2 md:overflow-visible md:px-3"
-              : "flex gap-2 overflow-x-auto px-4 pb-4 md:mt-6 md:block md:space-y-1 md:overflow-visible md:px-5"
-          }
-        >
+      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-slate-800 bg-slate-950/95 px-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2 text-white shadow-2xl backdrop-blur md:hidden">
+        <div className="mx-auto grid max-w-md grid-cols-6 gap-1">
           {NAV_ITEMS.map((item) => {
             const isActive =
               item.href === "/"
@@ -171,92 +263,32 @@ export default function AppNav({ userEmail }: { userEmail?: string }) {
               <Link
                 key={item.href}
                 href={item.href}
-                title={isCollapsed ? item.label : undefined}
+                aria-label={item.label}
+                title={item.label}
                 className={
-                  isCollapsed
-                    ? isActive
-                      ? "flex shrink-0 items-center justify-center whitespace-nowrap rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm md:w-full md:px-0"
-                      : "flex shrink-0 items-center justify-center whitespace-nowrap rounded-xl px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-900 hover:text-white md:w-full md:px-0"
-                    : isActive
-                    ? "flex shrink-0 items-center gap-3 whitespace-nowrap rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm md:w-full"
-                    : "flex shrink-0 items-center gap-3 whitespace-nowrap rounded-xl px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-900 hover:text-white md:w-full"
+                  isActive
+                    ? "flex min-w-0 flex-col items-center justify-center rounded-2xl bg-blue-600 px-1 py-2 text-white"
+                    : "flex min-w-0 flex-col items-center justify-center rounded-2xl px-1 py-2 text-slate-400 hover:bg-slate-900 hover:text-white"
                 }
               >
                 <span
                   className={
                     isActive
-                      ? "flex h-6 w-6 items-center justify-center rounded-lg bg-white/15 text-xs"
-                      : "flex h-6 w-6 items-center justify-center rounded-lg bg-slate-900 text-xs text-slate-500"
+                      ? "flex h-7 w-7 items-center justify-center rounded-xl bg-white/15 text-xs"
+                      : "flex h-7 w-7 items-center justify-center rounded-xl bg-slate-900 text-xs"
                   }
                 >
                   {item.icon}
                 </span>
-
-                {!isCollapsed && <span>{item.label}</span>}
+                <span className="mt-1 max-w-full truncate text-[10px] leading-none">
+                  {item.label === "Transactions" ? "Txns" : item.label}
+                </span>
               </Link>
             );
           })}
-        </nav>
-
-        <div
-          className={
-            isCollapsed
-              ? "mt-auto hidden px-3 pb-6 md:block"
-              : "mt-auto hidden px-5 pb-6 md:block"
-          }
-        >
-          {isCollapsed ? (
-            <div className="flex flex-col items-center gap-3">
-              <div
-                title={firstName}
-                className="flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-800 bg-slate-900 text-sm font-semibold text-blue-300"
-              >
-                {firstInitial}
-              </div>
-
-              <button
-                type="button"
-                onClick={logout}
-                className="flex h-10 w-10 items-center justify-center rounded-xl border border-red-900 text-sm text-red-300 hover:bg-red-950"
-                title="Logout"
-                aria-label="Logout"
-              >
-                ⎋
-              </button>
-            </div>
-          ) : (
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-600 text-sm font-semibold text-white">
-                  {firstInitial}
-                </div>
-
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-slate-200">
-                    {firstName}
-                  </p>
-                  <p className="truncate text-xs text-slate-500">
-                    Private beta
-                  </p>
-                </div>
-              </div>
-
-              <p className="mt-4 text-xs leading-5 text-slate-500">
-                Manual tracking is active. Bank sync and AI insights come next.
-              </p>
-
-              <button
-                type="button"
-                onClick={logout}
-                className="mt-4 w-full rounded-xl border border-red-900 px-4 py-2 text-sm text-red-300 hover:bg-red-950"
-              >
-                Logout
-              </button>
-            </div>
-          )}
         </div>
-      </div>
-    </aside>
+      </nav>
+    </>
   );
 }
 

@@ -315,7 +315,7 @@ export default function HomePage() {
         <AppNav userEmail={userEmail} />
 
         <div className="min-w-0 flex-1">
-          <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-7xl px-4 py-6 pb-28 sm:px-6 lg:px-8 md:pb-6">
             Loading dashboard...
           </div>
         </div>
@@ -328,24 +328,24 @@ export default function HomePage() {
       <AppNav userEmail={userEmail} />
 
       <div className="min-w-0 flex-1">
-        <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-          <div className="mb-8">
+        <div className="mx-auto max-w-7xl px-4 py-6 pb-28 sm:px-6 lg:px-8 md:pb-8">
+          <div className="mb-8 min-w-0">
             <p className="text-sm text-slate-400">WealthOS MVP</p>
-            <h1 className="mt-2 text-3xl font-semibold">
+            <h1 className="mt-2 break-words text-3xl font-semibold">
               Financial Dashboard
             </h1>
-            <p className="mt-1 text-sm text-slate-500">
+            <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500">
               Supabase-backed finance tracker with accounts, transactions,
               budgets, goals, cash flow, and net worth.
             </p>
             {userEmail && (
-              <p className="mt-1 text-xs text-slate-600">
+              <p className="mt-1 break-words text-xs text-slate-600">
                 Logged in as {userEmail}
               </p>
             )}
           </div>
 
-          <div className="grid gap-4 md:grid-cols-3">
+          <section className="grid min-w-0 gap-4 md:grid-cols-3">
             <DashboardCard
               title="Net Worth"
               value={formatCurrency(accountTotals.netWorth)}
@@ -363,9 +363,9 @@ export default function HomePage() {
               value={formatCurrency(accountTotals.liabilities)}
               subtitle="Credit cards, loans, debt"
             />
-          </div>
+          </section>
 
-          <div className="mt-4 grid gap-4 md:grid-cols-3">
+          <section className="mt-4 grid min-w-0 gap-4 md:grid-cols-3">
             <DashboardCard
               title="Monthly Income"
               value={formatCurrency(monthlySummary.income)}
@@ -383,9 +383,9 @@ export default function HomePage() {
               value={formatCurrency(monthlySummary.cashFlow)}
               subtitle="Income minus spending"
             />
-          </div>
+          </section>
 
-          <div className="mt-4 grid gap-4 md:grid-cols-3">
+          <section className="mt-4 grid min-w-0 gap-4 md:grid-cols-3">
             <DashboardCard
               title="Budget Remaining"
               value={formatCurrency(budgetSummary.remaining)}
@@ -407,12 +407,12 @@ export default function HomePage() {
               value={String(goalSummary.activeGoals)}
               subtitle={`${formatCurrency(goalSummary.remaining)} remaining`}
             />
-          </div>
+          </section>
 
-          <div className="mt-8 grid gap-6 xl:grid-cols-[1fr_380px]">
-            <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-              <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <div>
+          <section className="mt-8 grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
+            <section className="min-w-0 rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-5">
+              <div className="mb-4 flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
                   <h2 className="text-lg font-medium">Recent Transactions</h2>
                   <p className="text-sm text-slate-400">
                     Latest Supabase income, expenses, and transfers.
@@ -421,91 +421,118 @@ export default function HomePage() {
 
                 <Link
                   href="/transactions"
-                  className="text-sm text-blue-400 hover:text-blue-300"
+                  className="shrink-0 text-sm text-blue-400 hover:text-blue-300"
                 >
                   View all →
                 </Link>
               </div>
 
-              <div className="overflow-x-auto rounded-xl border border-slate-800">
-                <table className="w-full min-w-[720px] text-left text-sm">
-                  <thead className="bg-slate-950 text-slate-400">
-                    <tr>
-                      <th className="px-4 py-3">Transaction</th>
-                      <th className="px-4 py-3">Account</th>
-                      <th className="px-4 py-3">Category</th>
-                      <th className="px-4 py-3 text-right">Amount</th>
-                    </tr>
-                  </thead>
+              <div className="space-y-3 md:hidden">
+                {transactions.slice(0, 8).map((transaction) => (
+                  <TransactionCard
+                    key={transaction.id}
+                    transaction={transaction}
+                    accountName={getAccountName(transaction.account_id)}
+                  />
+                ))}
 
-                  <tbody>
-                    {transactions.slice(0, 8).map((transaction) => (
-                      <tr
-                        key={transaction.id}
-                        className="border-t border-slate-800 text-slate-200"
-                      >
-                        <td className="px-4 py-3">
-                          <div>
-                            <p className="font-medium">{transaction.name}</p>
-                            <p className="text-xs text-slate-500">
-                              {transaction.date} •{" "}
-                              {transaction.transaction_type}
-                            </p>
-                          </div>
-                        </td>
+                {transactions.length === 0 && (
+                  <div className="rounded-2xl border border-slate-800 bg-slate-950 p-8 text-center text-sm text-slate-500">
+                    No Supabase transactions yet. Add your first transaction or
+                    import CSV data.
+                  </div>
+                )}
+              </div>
 
-                        <td className="px-4 py-3 text-slate-300">
-                          {getAccountName(transaction.account_id)}
-                        </td>
-
-                        <td className="px-4 py-3 text-slate-300">
-                          {transaction.category}
-                        </td>
-
-                        <td className="px-4 py-3 text-right font-medium">
-                          <span
-                            className={
-                              transaction.transaction_type === "income"
-                                ? "text-emerald-300"
-                                : transaction.transaction_type === "expense"
-                                ? "text-red-300"
-                                : "text-slate-300"
-                            }
-                          >
-                            {transaction.transaction_type === "income"
-                              ? "+"
-                              : transaction.transaction_type === "expense"
-                              ? "-"
-                              : ""}
-                            {formatCurrency(Number(transaction.amount))}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-
-                    {transactions.length === 0 && (
+              <div className="hidden overflow-hidden rounded-xl border border-slate-800 md:block">
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[680px] text-left text-sm">
+                    <thead className="bg-slate-950 text-slate-400">
                       <tr>
-                        <td
-                          colSpan={4}
-                          className="px-4 py-10 text-center text-slate-500"
-                        >
-                          No Supabase transactions yet. Add your first
-                          transaction or import CSV data.
-                        </td>
+                        <th className="px-4 py-3">Transaction</th>
+                        <th className="px-4 py-3">Account</th>
+                        <th className="px-4 py-3">Category</th>
+                        <th className="px-4 py-3 text-right">Amount</th>
                       </tr>
-                    )}
-                  </tbody>
-                </table>
+                    </thead>
+
+                    <tbody>
+                      {transactions.slice(0, 8).map((transaction) => (
+                        <tr
+                          key={transaction.id}
+                          className="border-t border-slate-800 text-slate-200"
+                        >
+                          <td className="px-4 py-3">
+                            <div className="min-w-0">
+                              <p className="max-w-[240px] truncate font-medium">
+                                {transaction.name}
+                              </p>
+                              <p className="text-xs text-slate-500">
+                                {transaction.date} •{" "}
+                                {transaction.transaction_type}
+                              </p>
+                            </div>
+                          </td>
+
+                          <td className="px-4 py-3 text-slate-300">
+                            <span className="block max-w-[160px] truncate">
+                              {getAccountName(transaction.account_id)}
+                            </span>
+                          </td>
+
+                          <td className="px-4 py-3 text-slate-300">
+                            <span className="block max-w-[150px] truncate">
+                              {transaction.category}
+                            </span>
+                          </td>
+
+                          <td className="px-4 py-3 text-right font-medium">
+                            <span
+                              className={
+                                transaction.transaction_type === "income"
+                                  ? "text-emerald-300"
+                                  : transaction.transaction_type === "expense"
+                                  ? "text-red-300"
+                                  : "text-slate-300"
+                              }
+                            >
+                              {transaction.transaction_type === "income"
+                                ? "+"
+                                : transaction.transaction_type === "expense"
+                                ? "-"
+                                : ""}
+                              {formatCurrency(Number(transaction.amount))}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+
+                      {transactions.length === 0 && (
+                        <tr>
+                          <td
+                            colSpan={4}
+                            className="px-4 py-10 text-center text-slate-500"
+                          >
+                            No Supabase transactions yet. Add your first
+                            transaction or import CSV data.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </section>
 
-            <aside className="space-y-6">
-              <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-                <div className="mb-4 flex items-center justify-between">
-                  <h2 className="text-lg font-medium">Budget Snapshot</h2>
+            <aside className="min-w-0 space-y-6">
+              <section className="min-w-0 rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-5">
+                <div className="mb-4 flex min-w-0 items-center justify-between gap-3">
+                  <h2 className="min-w-0 break-words text-lg font-medium">
+                    Budget Snapshot
+                  </h2>
                   <Link
                     href="/budgets"
-                    className="text-sm text-blue-400 hover:text-blue-300"
+                    className="shrink-0 text-sm text-blue-400 hover:text-blue-300"
                   >
                     Edit →
                   </Link>
@@ -532,7 +559,7 @@ export default function HomePage() {
                 </div>
 
                 <div className="mt-5 rounded-xl border border-slate-800 bg-slate-950 p-4">
-                  <p className="text-sm text-slate-300">
+                  <p className="break-words text-sm leading-6 text-slate-300">
                     {budgetSummary.totalPlanned === 0
                       ? "Set planned budget amounts to activate budget tracking."
                       : budgetSummary.remaining >= 0
@@ -546,12 +573,14 @@ export default function HomePage() {
                 </div>
               </section>
 
-              <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-                <div className="mb-4 flex items-center justify-between">
-                  <h2 className="text-lg font-medium">Goal Snapshot</h2>
+              <section className="min-w-0 rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-5">
+                <div className="mb-4 flex min-w-0 items-center justify-between gap-3">
+                  <h2 className="min-w-0 break-words text-lg font-medium">
+                    Goal Snapshot
+                  </h2>
                   <Link
                     href="/goals"
-                    className="text-sm text-blue-400 hover:text-blue-300"
+                    className="shrink-0 text-sm text-blue-400 hover:text-blue-300"
                   >
                     Edit →
                   </Link>
@@ -583,13 +612,13 @@ export default function HomePage() {
                       style={{ width: `${goalSummary.progress}%` }}
                     />
                   </div>
-                  <p className="mt-2 text-xs text-slate-500">
+                  <p className="mt-2 break-words text-xs text-slate-500">
                     {Math.round(goalSummary.progress)}% complete across all goals
                   </p>
                 </div>
               </section>
 
-              <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+              <section className="min-w-0 rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-5">
                 <h2 className="text-lg font-medium">Build Progress</h2>
 
                 <div className="mt-5 space-y-4">
@@ -601,7 +630,7 @@ export default function HomePage() {
                   <ProgressItem done label="Budgets" />
                   <ProgressItem done label="Goals" />
                   <ProgressItem done label="Insights" />
-                  <ProgressItem label="Real AI API" />
+                  <ProgressItem done label="Real AI API" />
                   <ProgressItem label="Plaid sandbox" />
                 </div>
 
@@ -609,17 +638,73 @@ export default function HomePage() {
                   <p className="text-sm font-medium text-blue-200">
                     Recommended next step
                   </p>
-                  <p className="mt-1 text-sm text-blue-100/80">
-                    Stabilize edits, confirmations, loading states, and
-                    responsive polish before pushing this branch to production.
+                  <p className="mt-1 text-sm leading-6 text-blue-100/80">
+                    Add dashboard mini charts, then move into transaction detail
+                    links and Plaid Sandbox.
                   </p>
                 </div>
               </section>
             </aside>
-          </div>
+          </section>
         </div>
       </div>
     </main>
+  );
+}
+
+function TransactionCard({
+  transaction,
+  accountName,
+}: {
+  transaction: Transaction;
+  accountName: string;
+}) {
+  const amountClass =
+    transaction.transaction_type === "income"
+      ? "text-emerald-300"
+      : transaction.transaction_type === "expense"
+      ? "text-red-300"
+      : "text-slate-300";
+
+  const sign =
+    transaction.transaction_type === "income"
+      ? "+"
+      : transaction.transaction_type === "expense"
+      ? "-"
+      : "";
+
+  return (
+    <div className="min-w-0 rounded-2xl border border-slate-800 bg-slate-950 p-4">
+      <div className="flex min-w-0 items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="break-words text-sm font-medium text-slate-100">
+            {transaction.name}
+          </p>
+          <p className="mt-1 break-words text-xs text-slate-500">
+            {transaction.date} • {transaction.transaction_type}
+          </p>
+        </div>
+
+        <p className={`shrink-0 text-sm font-semibold ${amountClass}`}>
+          {sign}
+          {formatCurrency(Number(transaction.amount))}
+        </p>
+      </div>
+
+      <div className="mt-4 grid min-w-0 gap-2 text-xs text-slate-400">
+        <div className="flex min-w-0 justify-between gap-3">
+          <span className="shrink-0 text-slate-500">Account</span>
+          <span className="min-w-0 break-words text-right">{accountName}</span>
+        </div>
+
+        <div className="flex min-w-0 justify-between gap-3">
+          <span className="shrink-0 text-slate-500">Category</span>
+          <span className="min-w-0 break-words text-right">
+            {transaction.category}
+          </span>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -633,10 +718,10 @@ function DashboardCard({
   subtitle: string;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-sm">
+    <div className="min-w-0 rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-sm">
       <p className="text-sm text-slate-400">{title}</p>
-      <p className="mt-2 text-2xl font-semibold">{value}</p>
-      <p className="mt-1 text-xs text-slate-500">{subtitle}</p>
+      <p className="mt-2 break-words text-2xl font-semibold">{value}</p>
+      <p className="mt-1 break-words text-xs text-slate-500">{subtitle}</p>
     </div>
   );
 }
@@ -651,9 +736,15 @@ function MiniMetric({
   valueClass?: string;
 }) {
   return (
-    <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-      <span className="text-sm text-slate-400">{label}</span>
-      <span className={`text-sm font-medium ${valueClass}`}>{value}</span>
+    <div className="flex min-w-0 items-start justify-between gap-4 border-b border-slate-800 pb-3">
+      <span className="min-w-0 break-words text-sm text-slate-400">
+        {label}
+      </span>
+      <span
+        className={`shrink-0 text-right text-sm font-medium ${valueClass}`}
+      >
+        {value}
+      </span>
     </div>
   );
 }
@@ -666,13 +757,15 @@ function ProgressItem({
   done?: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-      <span className="text-sm text-slate-300">{label}</span>
+    <div className="flex min-w-0 items-center justify-between gap-4 border-b border-slate-800 pb-3">
+      <span className="min-w-0 break-words text-sm text-slate-300">
+        {label}
+      </span>
       <span
         className={
           done
-            ? "rounded-full bg-emerald-500/10 px-2 py-1 text-xs text-emerald-300"
-            : "rounded-full bg-slate-800 px-2 py-1 text-xs text-slate-400"
+            ? "shrink-0 rounded-full bg-emerald-500/10 px-2 py-1 text-xs text-emerald-300"
+            : "shrink-0 rounded-full bg-slate-800 px-2 py-1 text-xs text-slate-400"
         }
       >
         {done ? "Done" : "Next"}
