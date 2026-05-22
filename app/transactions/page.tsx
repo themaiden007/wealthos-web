@@ -1126,7 +1126,7 @@ export default function TransactionsPage() {
         <AppNav userEmail={userEmail} />
 
         <div className="min-w-0 flex-1">
-          <div className="mx-auto max-w-7xl px-4 py-6 pb-28 sm:px-6 lg:px-8 md:pb-6">
+          <div className="mx-auto w-full max-w-7xl overflow-x-hidden px-4 py-6 pb-28 sm:px-6 lg:px-8 md:pb-6">
             Loading transactions...
           </div>
         </div>
@@ -1139,9 +1139,9 @@ export default function TransactionsPage() {
       <AppNav userEmail={userEmail} />
 
       <div className="min-w-0 flex-1">
-        <div className="mx-auto max-w-7xl px-4 py-6 pb-28 sm:px-6 lg:px-8 md:pb-8">
-          <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
+        <div className="mx-auto w-full max-w-7xl overflow-x-hidden px-4 py-6 pb-28 sm:px-6 lg:px-8 md:pb-8">
+          <div className="mb-6 flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
               <p className="text-sm text-slate-400">WealthOS</p>
               <h1 className="mt-1 text-3xl font-semibold">Transactions</h1>
               <p className="mt-1 text-sm text-slate-500">
@@ -1149,7 +1149,7 @@ export default function TransactionsPage() {
               </p>
             </div>
 
-            <div className="flex flex-wrap gap-2">
+            <div className="flex max-w-full flex-wrap gap-2">
               <PlaidSyncButton
                 label="Sync Bank Data"
                 onComplete={reloadTransactions}
@@ -1158,7 +1158,7 @@ export default function TransactionsPage() {
               <button
                 type="button"
                 onClick={() => setShowImporter((current) => !current)}
-                className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-900"
+                className="shrink-0 rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-900"
               >
                 Smart Import
               </button>
@@ -1166,16 +1166,16 @@ export default function TransactionsPage() {
               <button
                 type="button"
                 onClick={() => setShowManualForm((current) => !current)}
-                className="rounded-xl bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-500"
+                className="shrink-0 rounded-xl bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-500"
               >
                 + Add Transaction
               </button>
             </div>
           </div>
 
-          <section className="overflow-hidden rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-sm">
-            <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-              <div>
+          <section className="min-w-0 overflow-hidden rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-sm">
+            <div className="grid min-w-0 gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+              <div className="min-w-0">
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
                   Monthly Cash Flow
                 </p>
@@ -1183,8 +1183,8 @@ export default function TransactionsPage() {
                 <p
                   className={
                     monthlySummary.cashFlow >= 0
-                      ? "mt-2 text-4xl font-semibold text-emerald-300"
-                      : "mt-2 text-4xl font-semibold text-red-300"
+                      ? "mt-2 break-words text-4xl font-semibold text-emerald-300"
+                      : "mt-2 break-words text-4xl font-semibold text-red-300"
                   }
                 >
                   {formatCurrency(monthlySummary.cashFlow)}
@@ -1219,7 +1219,7 @@ export default function TransactionsPage() {
                               : 0,
                             100
                           ),
-                          4
+                          monthlySummary.spending > 0 ? 4 : 0
                         )}%`,
                       }}
                     />
@@ -1237,7 +1237,7 @@ export default function TransactionsPage() {
                 </div>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+              <div className="grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-1">
                 <MetricTile
                   title="Income"
                   value={formatCurrency(monthlySummary.income)}
@@ -1258,9 +1258,9 @@ export default function TransactionsPage() {
           </section>
 
           {showManualForm && (
-            <section className="mt-6 rounded-2xl border border-slate-800 bg-slate-900 p-5">
+            <section className="mt-6 min-w-0 rounded-2xl border border-slate-800 bg-slate-900 p-5">
               <div className="mb-5 flex items-start justify-between gap-3">
-                <div>
+                <div className="min-w-0">
                   <h2 className="text-lg font-medium">Add Transaction</h2>
                   <p className="mt-1 text-sm text-slate-400">
                     Add a transaction manually when it is not synced or imported.
@@ -1270,7 +1270,7 @@ export default function TransactionsPage() {
                 <button
                   type="button"
                   onClick={() => setShowManualForm(false)}
-                  className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-400 hover:bg-slate-800"
+                  className="shrink-0 rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-400 hover:bg-slate-800"
                 >
                   Close
                 </button>
@@ -1291,7 +1291,7 @@ export default function TransactionsPage() {
               ) : (
                 <form
                   onSubmit={addTransaction}
-                  className="grid gap-4 lg:grid-cols-[1fr_1fr_1fr_1fr] xl:grid-cols-[1fr_1fr_1fr_1fr_auto]"
+                  className="grid min-w-0 gap-4 lg:grid-cols-[1fr_1fr_1fr_1fr] xl:grid-cols-[1fr_1fr_1fr_1fr_auto]"
                 >
                   <AccountSelect
                     accounts={accounts}
@@ -1299,27 +1299,27 @@ export default function TransactionsPage() {
                     setAccountId={setAccountId}
                   />
 
-                  <div>
+                  <div className="min-w-0">
                     <label className="text-sm text-slate-300">Date</label>
                     <input
                       value={date}
                       onChange={(event) => setDate(event.target.value)}
                       type="date"
-                      className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                      className="mt-1 w-full min-w-0 rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
                     />
                   </div>
 
-                  <div>
+                  <div className="min-w-0">
                     <label className="text-sm text-slate-300">Name</label>
                     <input
                       value={name}
                       onChange={(event) => setName(event.target.value)}
                       placeholder="Walmart, Salary, Rent"
-                      className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                      className="mt-1 w-full min-w-0 rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
                     />
                   </div>
 
-                  <div>
+                  <div className="min-w-0">
                     <label className="text-sm text-slate-300">Amount</label>
                     <input
                       value={amount}
@@ -1327,7 +1327,7 @@ export default function TransactionsPage() {
                       placeholder="45.99"
                       type="number"
                       step="0.01"
-                      className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                      className="mt-1 w-full min-w-0 rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
                     />
                   </div>
 
@@ -1335,19 +1335,19 @@ export default function TransactionsPage() {
                     <button
                       type="submit"
                       disabled={saving}
-                      className="w-full rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium hover:bg-blue-500 disabled:opacity-60"
+                      className="w-full shrink-0 rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium hover:bg-blue-500 disabled:opacity-60"
                     >
                       {saving ? "Saving..." : "Save"}
                     </button>
                   </div>
 
-                  <div>
+                  <div className="min-w-0">
                     <label className="text-sm text-slate-300">Merchant</label>
                     <input
                       value={merchantName}
                       onChange={(event) => setMerchantName(event.target.value)}
                       placeholder="Optional"
-                      className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                      className="mt-1 w-full min-w-0 rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
                     />
                   </div>
 
@@ -1361,13 +1361,13 @@ export default function TransactionsPage() {
                     setCategory={setCategory}
                   />
 
-                  <div className="lg:col-span-2">
+                  <div className="min-w-0 lg:col-span-2">
                     <label className="text-sm text-slate-300">Notes</label>
                     <input
                       value={notes}
                       onChange={(event) => setNotes(event.target.value)}
                       placeholder="Optional notes"
-                      className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                      className="mt-1 w-full min-w-0 rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
                     />
                   </div>
                 </form>
@@ -1376,7 +1376,7 @@ export default function TransactionsPage() {
           )}
 
           {showImporter && (
-            <section className="mt-6 rounded-2xl border border-slate-800 bg-slate-900 p-5">
+            <section className="mt-6 min-w-0 rounded-2xl border border-slate-800 bg-slate-900 p-5">
               <SmartImporterPanel
                 accounts={accounts}
                 accountId={accountId}
@@ -1417,10 +1417,10 @@ export default function TransactionsPage() {
             </section>
           )}
 
-          <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-            <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-              <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                <div>
+          <div className="mt-6 grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+            <section className="min-w-0 rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-5">
+              <div className="mb-5 flex min-w-0 flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div className="min-w-0">
                   <h2 className="text-lg font-medium">Transaction Feed</h2>
                   <p className="text-sm text-slate-400">
                     {filteredTransactions.length} transaction
@@ -1428,7 +1428,7 @@ export default function TransactionsPage() {
                   </p>
                 </div>
 
-                <div className="flex flex-wrap gap-2">
+                <div className="flex max-w-full gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
                   {(["all", "income", "expense", "transfer"] as const).map(
                     (filter) => (
                       <button
@@ -1437,8 +1437,8 @@ export default function TransactionsPage() {
                         onClick={() => setActiveFilter(filter)}
                         className={
                           activeFilter === filter
-                            ? "rounded-xl bg-blue-600 px-3 py-2 text-xs font-medium capitalize text-white"
-                            : "rounded-xl border border-slate-700 px-3 py-2 text-xs capitalize text-slate-400 hover:bg-slate-800"
+                            ? "shrink-0 rounded-xl bg-blue-600 px-3 py-2 text-xs font-medium capitalize text-white"
+                            : "shrink-0 rounded-xl border border-slate-700 px-3 py-2 text-xs capitalize text-slate-400 hover:bg-slate-800"
                         }
                       >
                         {filter}
@@ -1456,9 +1456,9 @@ export default function TransactionsPage() {
               ) : (
                 <div className="space-y-5">
                   {groupedTransactions.map((group) => (
-                    <div key={group.date}>
-                      <div className="mb-3 flex items-center justify-between gap-3">
-                        <div>
+                    <div key={group.date} className="min-w-0">
+                      <div className="mb-3 flex min-w-0 items-center justify-between gap-3">
+                        <div className="min-w-0">
                           <p className="text-sm font-semibold text-slate-200">
                             {formatDateLabel(group.date)}
                           </p>
@@ -1468,7 +1468,7 @@ export default function TransactionsPage() {
                           </p>
                         </div>
 
-                        <div className="text-right text-xs text-slate-500">
+                        <div className="shrink-0 text-right text-xs text-slate-500">
                           {group.income > 0 && (
                             <p className="text-emerald-300">
                               +{formatCurrency(group.income)}
@@ -1529,7 +1529,7 @@ export default function TransactionsPage() {
               )}
             </section>
 
-            <aside className="space-y-6">
+            <aside className="min-w-0 space-y-6">
               <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
                 <h2 className="text-lg font-medium">Top Categories</h2>
                 <p className="mt-1 text-sm text-slate-500">
@@ -1549,8 +1549,8 @@ export default function TransactionsPage() {
                           : 0;
 
                       return (
-                        <div key={row.category}>
-                          <div className="flex items-center justify-between gap-3">
+                        <div key={row.category} className="min-w-0">
+                          <div className="flex min-w-0 items-center justify-between gap-3">
                             <p className="truncate text-sm text-slate-300">
                               {row.category}
                             </p>
@@ -1620,15 +1620,15 @@ function MetricTile({
   tone: "income" | "expense" | "neutral";
 }) {
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+    <div className="min-w-0 rounded-2xl border border-slate-800 bg-slate-950 p-4">
       <p className="text-sm text-slate-500">{title}</p>
       <p
         className={
           tone === "income"
-            ? "mt-2 text-2xl font-semibold text-emerald-300"
+            ? "mt-2 break-words text-2xl font-semibold text-emerald-300"
             : tone === "expense"
-            ? "mt-2 text-2xl font-semibold text-red-300"
-            : "mt-2 text-2xl font-semibold text-slate-200"
+            ? "mt-2 break-words text-2xl font-semibold text-red-300"
+            : "mt-2 break-words text-2xl font-semibold text-slate-200"
         }
       >
         {value}
@@ -1639,9 +1639,11 @@ function MetricTile({
 
 function SideMetric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-      <span className="text-sm text-slate-400">{label}</span>
-      <span className="text-sm font-medium text-slate-100">{value}</span>
+    <div className="flex min-w-0 items-center justify-between gap-3 border-b border-slate-800 pb-3">
+      <span className="min-w-0 text-sm text-slate-400">{label}</span>
+      <span className="shrink-0 text-sm font-medium text-slate-100">
+        {value}
+      </span>
     </div>
   );
 }
@@ -1705,7 +1707,7 @@ function TransactionFeedRow({
 }) {
   if (isEditing) {
     return (
-      <div className="p-4">
+      <div className="min-w-0 p-4">
         <TransactionCard
           transaction={transaction}
           accounts={accounts}
@@ -1743,19 +1745,19 @@ function TransactionFeedRow({
   const isExpense = transaction.transaction_type === "expense";
 
   return (
-    <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex min-w-0 flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           <p className="truncate font-medium text-slate-100">
             {transaction.name}
           </p>
 
-          <span className="rounded-full bg-slate-800 px-2 py-1 text-[11px] capitalize text-slate-400">
+          <span className="shrink-0 rounded-full bg-slate-800 px-2 py-1 text-[11px] capitalize text-slate-400">
             {transaction.category || "Other"}
           </span>
 
           {transaction.source === "plaid" && (
-            <span className="rounded-full bg-emerald-500/10 px-2 py-1 text-[11px] text-emerald-300">
+            <span className="shrink-0 rounded-full bg-emerald-500/10 px-2 py-1 text-[11px] text-emerald-300">
               Plaid
             </span>
           )}
@@ -1767,21 +1769,21 @@ function TransactionFeedRow({
         </p>
       </div>
 
-      <div className="flex shrink-0 items-center gap-3">
+      <div className="flex min-w-0 flex-col gap-2 sm:shrink-0 sm:flex-row sm:items-center sm:gap-3">
         <p
           className={
             isIncome
-              ? "text-right text-lg font-semibold text-emerald-300"
+              ? "text-left text-lg font-semibold text-emerald-300 sm:text-right"
               : isExpense
-              ? "text-right text-lg font-semibold text-red-300"
-              : "text-right text-lg font-semibold text-slate-300"
+              ? "text-left text-lg font-semibold text-red-300 sm:text-right"
+              : "text-left text-lg font-semibold text-slate-300 sm:text-right"
           }
         >
           {isIncome ? "+" : isExpense ? "-" : ""}
           {formatCurrency(Number(transaction.amount))}
         </p>
 
-        <div className="flex gap-1">
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:gap-1">
           <button
             type="button"
             onClick={() => startEditing(transaction)}
@@ -1885,7 +1887,7 @@ function SmartImporterPanel({
   deleteCategoryRule: (rule: CategoryRule) => void;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+    <div className="min-w-0 rounded-2xl border border-slate-800 bg-slate-950 p-4">
       <h3 className="text-sm font-medium text-slate-200">
         Smart Import Automation
       </h3>
@@ -1894,13 +1896,13 @@ function SmartImporterPanel({
         preview transactions, flag duplicates, and apply category rules.
       </p>
 
-      <div className="mt-4 grid gap-4 sm:grid-cols-2">
-        <div>
+      <div className="mt-4 grid min-w-0 gap-4 sm:grid-cols-2">
+        <div className="min-w-0">
           <label className="text-sm text-slate-300">Import Account</label>
           <select
             value={accountId}
             onChange={(event) => setAccountId(event.target.value)}
-            className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-blue-500"
+            className="mt-1 w-full min-w-0 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-blue-500"
           >
             {accounts.map((account) => (
               <option key={account.id} value={account.id}>
@@ -1910,13 +1912,13 @@ function SmartImporterPanel({
           </select>
         </div>
 
-        <div>
+        <div className="min-w-0">
           <label className="text-sm text-slate-300">Source / Bank Name</label>
           <input
             value={sourceName}
             onChange={(event) => setSourceName(event.target.value)}
             placeholder="Example: Chase, Amex, Fidelity"
-            className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-blue-500"
+            className="mt-1 w-full min-w-0 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-blue-500"
           />
         </div>
       </div>
@@ -1928,7 +1930,7 @@ function SmartImporterPanel({
           accept=".csv,.xlsx,.pdf,text/csv,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
           onChange={handleImportFile}
           disabled={parsingFile}
-          className="mt-3 block w-full text-sm text-slate-400 file:mr-4 file:rounded-xl file:border-0 file:bg-blue-600 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-blue-500 disabled:opacity-60"
+          className="mt-3 block w-full min-w-0 text-sm text-slate-400 file:mr-4 file:rounded-xl file:border-0 file:bg-blue-600 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-blue-500 disabled:opacity-60"
         />
         <p className="mt-2 text-xs leading-5 text-slate-500">
           Legacy .xls files are not enabled yet. Export as CSV or XLSX for best
@@ -1943,20 +1945,20 @@ function SmartImporterPanel({
         )}
       </div>
 
-      <div className="mt-4">
+      <div className="mt-4 min-w-0">
         <label className="text-sm text-slate-300">Or Paste CSV</label>
         <textarea
           value={csvText}
           onChange={(event) => setCsvText(event.target.value)}
           placeholder={SAMPLE_CSV}
           rows={6}
-          className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 font-mono text-xs outline-none focus:border-blue-500"
+          className="mt-1 w-full min-w-0 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 font-mono text-xs outline-none focus:border-blue-500"
         />
         <div className="mt-2 flex flex-wrap gap-2">
           <button
             type="button"
             onClick={() => setCsvText(SAMPLE_CSV)}
-            className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800"
+            className="shrink-0 rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800"
           >
             Use Sample CSV
           </button>
@@ -1964,7 +1966,7 @@ function SmartImporterPanel({
             type="button"
             onClick={parsePastedCsvPreview}
             disabled={parsingFile}
-            className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium hover:bg-blue-500 disabled:opacity-60"
+            className="shrink-0 rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium hover:bg-blue-500 disabled:opacity-60"
           >
             {parsingFile ? "Parsing..." : "Preview CSV"}
           </button>
@@ -1979,19 +1981,19 @@ function SmartImporterPanel({
           Rules apply during import. Example: name contains Walmart → Groceries.
         </p>
 
-        <div className="mt-4 grid gap-3">
+        <div className="mt-4 grid min-w-0 gap-3">
           <input
             value={newRuleMatch}
             onChange={(event) => setNewRuleMatch(event.target.value)}
             placeholder="Text to match, e.g. Walmart"
-            className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
+            className="w-full min-w-0 rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
           />
 
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid min-w-0 gap-3 sm:grid-cols-2">
             <select
               value={newRuleCategory}
               onChange={(event) => setNewRuleCategory(event.target.value)}
-              className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
+              className="w-full min-w-0 rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
             >
               {CATEGORY_OPTIONS.map((option) => (
                 <option key={option} value={option}>
@@ -2005,7 +2007,7 @@ function SmartImporterPanel({
               onChange={(event) =>
                 setNewRuleType(event.target.value as TransactionType)
               }
-              className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
+              className="w-full min-w-0 rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
             >
               <option value="expense">Expense</option>
               <option value="income">Income</option>
@@ -2028,7 +2030,7 @@ function SmartImporterPanel({
             {categoryRules.slice(0, 5).map((rule) => (
               <div
                 key={rule.id}
-                className="flex items-start justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950 p-3"
+                className="flex min-w-0 items-start justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950 p-3"
               >
                 <div className="min-w-0">
                   <p className="break-words text-xs font-medium text-slate-300">
@@ -2060,8 +2062,8 @@ function SmartImporterPanel({
 
       {previewRows.length > 0 && (
         <div className="mt-5 rounded-2xl border border-slate-800 bg-slate-900 p-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div>
+          <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
               <h4 className="text-sm font-medium text-slate-200">
                 Import Preview
               </h4>
@@ -2071,18 +2073,18 @@ function SmartImporterPanel({
               </p>
             </div>
 
-            <div className="flex flex-wrap gap-2">
+            <div className="flex max-w-full gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
               <button
                 type="button"
                 onClick={selectAllNewRows}
-                className="rounded-xl border border-slate-700 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800"
+                className="shrink-0 rounded-xl border border-slate-700 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800"
               >
                 Select New
               </button>
               <button
                 type="button"
                 onClick={clearPreviewSelection}
-                className="rounded-xl border border-slate-700 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800"
+                className="shrink-0 rounded-xl border border-slate-700 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800"
               >
                 Clear
               </button>
@@ -2094,7 +2096,7 @@ function SmartImporterPanel({
               <p className="text-xs font-medium text-slate-300">
                 Column Mapping
               </p>
-              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <div className="mt-3 grid min-w-0 gap-3 sm:grid-cols-2">
                 <MappingSelect
                   label="Date"
                   value={importMapping.dateColumn}
@@ -2204,12 +2206,12 @@ function MappingSelect({
   onChange: (value: string) => void;
 }) {
   return (
-    <div>
+    <div className="min-w-0">
       <label className="text-xs text-slate-500">{label}</label>
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs outline-none focus:border-blue-500"
+        className="mt-1 w-full min-w-0 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs outline-none focus:border-blue-500"
       >
         <option value="">Not mapped</option>
         {columns.map((column) => (
@@ -2238,7 +2240,7 @@ function PreviewRowCard({
 
   return (
     <div className={`rounded-2xl border p-3 ${statusClass}`}>
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex min-w-0 items-start justify-between gap-3">
         <label className="flex min-w-0 items-start gap-3">
           <input
             type="checkbox"
@@ -2331,23 +2333,23 @@ function TransactionCard({
     <div className="min-w-0 rounded-2xl border border-slate-800 bg-slate-950 p-4">
       {isEditing ? (
         <div className="space-y-3">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div>
+          <div className="grid min-w-0 gap-3 sm:grid-cols-2">
+            <div className="min-w-0">
               <label className="text-xs text-slate-400">Date</label>
               <input
                 value={editDate}
                 onChange={(event) => setEditDate(event.target.value)}
                 type="date"
-                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                className="mt-1 w-full min-w-0 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-blue-500"
               />
             </div>
 
-            <div>
+            <div className="min-w-0">
               <label className="text-xs text-slate-400">Account</label>
               <select
                 value={editAccountId}
                 onChange={(event) => setEditAccountId(event.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                className="mt-1 w-full min-w-0 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-blue-500"
               >
                 {accounts.map((account) => (
                   <option key={account.id} value={account.id}>
@@ -2358,44 +2360,44 @@ function TransactionCard({
             </div>
           </div>
 
-          <div>
+          <div className="min-w-0">
             <label className="text-xs text-slate-400">Transaction Name</label>
             <input
               value={editName}
               onChange={(event) => setEditName(event.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-blue-500"
+              className="mt-1 w-full min-w-0 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-blue-500"
             />
           </div>
 
-          <div>
+          <div className="min-w-0">
             <label className="text-xs text-slate-400">Merchant</label>
             <input
               value={editMerchantName}
               onChange={(event) => setEditMerchantName(event.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-blue-500"
+              className="mt-1 w-full min-w-0 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-blue-500"
             />
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div>
+          <div className="grid min-w-0 gap-3 sm:grid-cols-3">
+            <div className="min-w-0">
               <label className="text-xs text-slate-400">Amount</label>
               <input
                 value={editAmount}
                 onChange={(event) => setEditAmount(event.target.value)}
                 type="number"
                 step="0.01"
-                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                className="mt-1 w-full min-w-0 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-blue-500"
               />
             </div>
 
-            <div>
+            <div className="min-w-0">
               <label className="text-xs text-slate-400">Type</label>
               <select
                 value={editTransactionType}
                 onChange={(event) =>
                   setEditTransactionType(event.target.value as TransactionType)
                 }
-                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                className="mt-1 w-full min-w-0 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-blue-500"
               >
                 <option value="expense">Expense</option>
                 <option value="income">Income</option>
@@ -2403,12 +2405,12 @@ function TransactionCard({
               </select>
             </div>
 
-            <div>
+            <div className="min-w-0">
               <label className="text-xs text-slate-400">Category</label>
               <select
                 value={editCategory}
                 onChange={(event) => setEditCategory(event.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                className="mt-1 w-full min-w-0 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-blue-500"
               >
                 {CATEGORY_OPTIONS.map((option) => (
                   <option key={option} value={option}>
@@ -2419,13 +2421,13 @@ function TransactionCard({
             </div>
           </div>
 
-          <div>
+          <div className="min-w-0">
             <label className="text-xs text-slate-400">Notes</label>
             <textarea
               value={editNotes}
               onChange={(event) => setEditNotes(event.target.value)}
               rows={2}
-              className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-blue-500"
+              className="mt-1 w-full min-w-0 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-blue-500"
             />
           </div>
 
@@ -2451,7 +2453,7 @@ function TransactionCard({
         </div>
       ) : (
         <>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">
               <p className="break-words font-medium">{transaction.name}</p>
               <p className="mt-1 break-words text-xs text-slate-500">
@@ -2477,7 +2479,7 @@ function TransactionCard({
             </p>
           </div>
 
-          <div className="mt-4 flex flex-wrap gap-2">
+          <div className="mt-4 flex min-w-0 flex-wrap gap-2">
             <span className="rounded-full bg-slate-800 px-2 py-1 text-xs capitalize text-slate-300">
               {transaction.transaction_type}
             </span>
@@ -2532,12 +2534,12 @@ function AccountSelect({
   setAccountId: (value: string) => void;
 }) {
   return (
-    <div>
+    <div className="min-w-0">
       <label className="text-sm text-slate-300">Account</label>
       <select
         value={accountId}
         onChange={(event) => setAccountId(event.target.value)}
-        className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
+        className="mt-1 w-full min-w-0 rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
       >
         {accounts.map((account) => (
           <option key={account.id} value={account.id}>
@@ -2557,14 +2559,14 @@ function TransactionTypeSelect({
   setTransactionType: (value: TransactionType) => void;
 }) {
   return (
-    <div>
+    <div className="min-w-0">
       <label className="text-sm text-slate-300">Type</label>
       <select
         value={transactionType}
         onChange={(event) =>
           setTransactionType(event.target.value as TransactionType)
         }
-        className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
+        className="mt-1 w-full min-w-0 rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
       >
         <option value="expense">Expense</option>
         <option value="income">Income</option>
@@ -2582,12 +2584,12 @@ function CategorySelect({
   setCategory: (value: string) => void;
 }) {
   return (
-    <div>
+    <div className="min-w-0">
       <label className="text-sm text-slate-300">Category</label>
       <select
         value={category}
         onChange={(event) => setCategory(event.target.value)}
-        className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
+        className="mt-1 w-full min-w-0 rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
       >
         {CATEGORY_OPTIONS.map((option) => (
           <option key={option} value={option}>
