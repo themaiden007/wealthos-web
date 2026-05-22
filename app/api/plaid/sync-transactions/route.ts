@@ -44,10 +44,7 @@ function mapPlaidCategory(transaction: PlaidTransaction) {
     return "Restaurants";
   }
 
-  if (
-    normalized.includes("grocery") ||
-    normalized.includes("supermarket")
-  ) {
+  if (normalized.includes("grocery") || normalized.includes("supermarket")) {
     return "Groceries";
   }
 
@@ -67,63 +64,56 @@ function mapPlaidCategory(transaction: PlaidTransaction) {
     return "Transportation";
   }
 
-  if (
-    normalized.includes("gas") ||
-    normalized.includes("fuel")
-  ) {
+  if (normalized.includes("gas") || normalized.includes("fuel")) {
     return "Fuel";
   }
 
-  if (
-    normalized.includes("rent") ||
-    normalized.includes("mortgage")
-  ) {
+  if (normalized.includes("rent") || normalized.includes("mortgage")) {
     return "Rent/Mortgage";
   }
 
-  if (
-    normalized.includes("loan")
-  ) {
+  if (normalized.includes("loan")) {
     return "Loan Payment";
   }
 
-  if (
-    normalized.includes("credit card")
-  ) {
+  if (normalized.includes("credit card")) {
     return "Credit Card Payment";
   }
 
-  if (
-    normalized.includes("transfer")
-  ) {
+  if (normalized.includes("transfer")) {
     return "Transfer";
   }
 
-  if (
-    normalized.includes("insurance")
-  ) {
+  if (normalized.includes("insurance")) {
     return "Insurance";
   }
 
-  if (
-    normalized.includes("subscription")
-  ) {
+  if (normalized.includes("subscription")) {
     return "Subscriptions";
   }
 
-  if (
-    normalized.includes("entertainment")
-  ) {
+  if (normalized.includes("entertainment")) {
     return "Entertainment";
   }
 
-  if (
-    normalized.includes("travel")
-  ) {
+  if (normalized.includes("travel")) {
     return "Travel";
   }
 
   return legacyCategory || "Other";
+}
+
+function mapPlaidAccountType(type: string, subtype?: string | null) {
+  const normalizedType = String(type || "").toLowerCase();
+  const normalizedSubtype = String(subtype || "").toLowerCase();
+
+  if (normalizedType === "credit") return "credit_card";
+  if (normalizedType === "loan") return "loan";
+  if (normalizedSubtype.includes("checking")) return "checking";
+  if (normalizedSubtype.includes("savings")) return "savings";
+  if (normalizedType === "investment") return "investment";
+
+  return "other_asset";
 }
 
 export async function POST(request: NextRequest) {
@@ -168,8 +158,129 @@ export async function POST(request: NextRequest) {
     let totalModified = 0;
     let totalRemoved = 0;
     let totalInsertedOrUpdated = 0;
+    let totalBalancesUpdated = 0;
 
     for (const item of plaidItems || []) {
+      const now = new Date().toISOString();
+
+      const accountsResponse = await plaidClient.accountsGet({
+        access_token: item.access_token,
+      });
+
+      const { data: existingPlaidAccounts, error: existingPlaidAccountsError } =
+        await serverSupabase
+          .from("plaid_accounts")
+          .select("*")
+          .eq("user_id", user.id)
+          .eq("plaid_item_id", item.id);
+
+      if (existingPlaidAccountsError) {
+        return NextResponse.json(
+          { error: existingPlaidAccountsError.message },
+          { status: 500 }
+        );
+      }
+
+      const existingPlaidAccountMap = new Map<string, any>();
+
+      (existingPlaidAccounts || []).forEach((account) => {
+        existingPlaidAccountMap.set(String(account.plaid_account_id), account);
+      });
+
+      for (const plaidAccount of accountsResponse.data.accounts) {
+        const existingPlaidAccount = existingPlaidAccountMap.get(
+          plaidAccount.account_id
+        );
+
+        const accountBalance = Number(plaidAccount.balances.current || 0);
+        const availableBalance = plaidAccount.balances.available;
+        const currency = plaidAccount.balances.iso_currency_code || "USD";
+        const accountType = mapPlaidAccountType(
+          String(plaidAccount.type || ""),
+          plaidAccount.subtype || null
+        );
+
+        let wealthosAccountId = existingPlaidAccount?.wealthos_account_id;
+
+        if (!wealthosAccountId) {
+          const { data: matchingWealthAccount } = await serverSupabase
+            .from("accounts")
+            .select("*")
+            .eq("user_id", user.id)
+            .eq("name", plaidAccount.name)
+            .eq("institution_name", item.institution_name || "Plaid")
+            .eq("source", "plaid")
+            .maybeSingle();
+
+          if (matchingWealthAccount) {
+            wealthosAccountId = matchingWealthAccount.id;
+          } else {
+            const { data: createdAccount, error: createAccountError } =
+              await serverSupabase
+                .from("accounts")
+                .insert({
+                  user_id: user.id,
+                  name: plaidAccount.name,
+                  institution_name: item.institution_name || "Plaid",
+                  account_type: accountType,
+                  balance: accountBalance,
+                  currency,
+                  source: "plaid",
+                  is_active: true,
+                  updated_at: now,
+                })
+                .select()
+                .single();
+
+            if (!createAccountError && createdAccount) {
+              wealthosAccountId = createdAccount.id;
+            }
+          }
+        }
+
+        if (wealthosAccountId) {
+          const { error: updateWealthAccountError } = await serverSupabase
+            .from("accounts")
+            .update({
+              name: plaidAccount.name,
+              institution_name: item.institution_name || "Plaid",
+              account_type: accountType,
+              balance: accountBalance,
+              currency,
+              source: "plaid",
+              is_active: true,
+              updated_at: now,
+            })
+            .eq("id", wealthosAccountId);
+
+          if (!updateWealthAccountError) {
+            totalBalancesUpdated += 1;
+          }
+        }
+
+        await serverSupabase.from("plaid_accounts").upsert(
+          {
+            user_id: user.id,
+            plaid_item_id: item.id,
+            plaid_account_id: plaidAccount.account_id,
+            wealthos_account_id: wealthosAccountId || null,
+            name: plaidAccount.name,
+            official_name: plaidAccount.official_name || null,
+            type: plaidAccount.type || null,
+            subtype: plaidAccount.subtype || null,
+            mask: plaidAccount.mask || null,
+            current_balance: accountBalance,
+            available_balance: availableBalance,
+            iso_currency_code: currency,
+            is_active: true,
+            updated_at: now,
+          },
+          {
+            onConflict: "user_id,plaid_account_id",
+          }
+        );
+      }
+
       let cursor = item.transactions_cursor || null;
       let hasMore = true;
 
@@ -216,8 +327,6 @@ export async function POST(request: NextRequest) {
           );
         }
       });
-
-      const now = new Date().toISOString();
 
       const upsertTransactions = [...added, ...modified].flatMap(
         (transaction) => {
@@ -305,6 +414,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      balances_updated: totalBalancesUpdated,
       added: totalAdded,
       modified: totalModified,
       removed: totalRemoved,
@@ -314,7 +424,7 @@ export async function POST(request: NextRequest) {
     const message =
       error?.response?.data?.error_message ||
       error?.message ||
-      "Failed to sync Plaid transactions.";
+      "Failed to sync Plaid data.";
 
     return NextResponse.json({ error: message }, { status: 500 });
   }
