@@ -33,6 +33,18 @@ type BudgetItem = {
   updated_at: string;
 };
 
+type BudgetRowStatus = "good" | "warning" | "over" | "unplanned";
+
+type BudgetRow = {
+  id: string;
+  category: string;
+  plannedAmount: number;
+  actualAmount: number;
+  remaining: number;
+  percentUsed: number;
+  status: BudgetRowStatus;
+};
+
 const DEFAULT_BUDGET_CATEGORIES = [
   "Groceries",
   "Restaurants",
@@ -70,6 +82,11 @@ export default function BudgetPage() {
   const [resetting, setResetting] = useState(false);
   const [autofilling, setAutofilling] = useState(false);
   const [addingCategory, setAddingCategory] = useState(false);
+
+  const [showAddCategory, setShowAddCategory] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<
+    "all" | "over" | "warning" | "good" | "unplanned"
+  >("all");
 
   const [selectedMonth, setSelectedMonth] = useState(
     new Date().toISOString().slice(0, 7)
@@ -160,7 +177,7 @@ export default function BudgetPage() {
     initialize();
   }, [showToast]);
 
-  const budgetRows = useMemo(() => {
+  const budgetRows = useMemo<BudgetRow[]>(() => {
     const monthTransactions = transactions.filter(
       (transaction) =>
         transaction.date.startsWith(selectedMonth) &&
@@ -185,6 +202,15 @@ export default function BudgetPage() {
             ? 999
             : 0;
 
+        const status: BudgetRowStatus =
+          plannedAmount === 0 && actualAmount > 0
+            ? "unplanned"
+            : remaining < 0
+            ? "over"
+            : percentUsed >= 80
+            ? "warning"
+            : "good";
+
         return {
           id: item.id,
           category: item.category,
@@ -192,17 +218,21 @@ export default function BudgetPage() {
           actualAmount,
           remaining,
           percentUsed,
-          status:
-            plannedAmount === 0 && actualAmount > 0
-              ? "unplanned"
-              : remaining < 0
-              ? "over"
-              : percentUsed >= 80
-              ? "warning"
-              : "good",
+          status,
         };
       })
       .sort((a, b) => {
+        const statusRank: Record<BudgetRowStatus, number> = {
+          over: 0,
+          unplanned: 1,
+          warning: 2,
+          good: 3,
+        };
+
+        if (statusRank[a.status] !== statusRank[b.status]) {
+          return statusRank[a.status] - statusRank[b.status];
+        }
+
         if (a.actualAmount !== b.actualAmount) {
           return b.actualAmount - a.actualAmount;
         }
@@ -210,6 +240,12 @@ export default function BudgetPage() {
         return a.category.localeCompare(b.category);
       });
   }, [transactions, budgetItems, selectedMonth]);
+
+  const filteredBudgetRows = useMemo(() => {
+    if (statusFilter === "all") return budgetRows;
+
+    return budgetRows.filter((row) => row.status === statusFilter);
+  }, [budgetRows, statusFilter]);
 
   const summary = useMemo(() => {
     const totalPlanned = budgetRows.reduce(
@@ -223,7 +259,14 @@ export default function BudgetPage() {
     );
 
     const totalRemaining = totalPlanned - totalActual;
-    const overBudgetCount = budgetRows.filter((row) => row.remaining < 0).length;
+    const percentUsed =
+      totalPlanned > 0 ? Math.min((totalActual / totalPlanned) * 100, 999) : 0;
+
+    const overBudgetCount = budgetRows.filter((row) => row.status === "over")
+      .length;
+
+    const warningCount = budgetRows.filter((row) => row.status === "warning")
+      .length;
 
     const unplannedSpending = budgetRows
       .filter((row) => row.status === "unplanned")
@@ -233,9 +276,17 @@ export default function BudgetPage() {
       totalPlanned,
       totalActual,
       totalRemaining,
+      percentUsed,
       overBudgetCount,
+      warningCount,
       unplannedSpending,
     };
+  }, [budgetRows]);
+
+  const topRiskRows = useMemo(() => {
+    return budgetRows
+      .filter((row) => row.status === "over" || row.status === "warning")
+      .slice(0, 5);
   }, [budgetRows]);
 
   async function updateBudget(rowId: string, value: string) {
@@ -355,6 +406,7 @@ export default function BudgetPage() {
 
     setNewCategoryName("");
     setNewCategoryBudget("");
+    setShowAddCategory(false);
 
     showToast({
       type: "success",
@@ -363,12 +415,7 @@ export default function BudgetPage() {
     });
   }
 
-  async function deleteBudgetCategory(row: {
-    id: string;
-    category: string;
-    plannedAmount: number;
-    actualAmount: number;
-  }) {
+  async function deleteBudgetCategory(row: BudgetRow) {
     const confirmed = await confirm({
       title: `Delete ${row.category}?`,
       message:
@@ -476,17 +523,18 @@ export default function BudgetPage() {
 
     setBudgetItems(updated);
 
-    const updates = updated.map((item) =>
-      supabase
-        .from("budget_items")
-        .update({
-          planned_amount: item.planned_amount,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", item.id)
+    const results = await Promise.all(
+      updated.map((item) =>
+        supabase
+          .from("budget_items")
+          .update({
+            planned_amount: item.planned_amount,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", item.id)
+      )
     );
 
-    const results = await Promise.all(updates);
     setAutofilling(false);
 
     const failed = results.find((result) => result.error);
@@ -513,7 +561,7 @@ export default function BudgetPage() {
         <AppNav userEmail={userEmail} />
 
         <div className="min-w-0 flex-1">
-          <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+          <div className="mx-auto w-full max-w-7xl overflow-x-hidden px-4 py-6 pb-28 sm:px-6 lg:px-8 md:pb-6">
             Loading budgets...
           </div>
         </div>
@@ -526,84 +574,147 @@ export default function BudgetPage() {
       <AppNav userEmail={userEmail} />
 
       <div className="min-w-0 flex-1">
-        <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-          <div className="mb-8">
-            <p className="text-sm text-slate-400">WealthOS</p>
-            <h1 className="mt-2 text-3xl font-semibold">Budgets</h1>
-            <p className="mt-1 text-sm text-slate-500">
-              Plan monthly category spending and compare it against actual
-              transactions.
-            </p>
-          </div>
+        <div className="mx-auto w-full max-w-7xl overflow-x-hidden px-4 py-6 pb-28 sm:px-6 lg:px-8 md:pb-8">
+          <div className="mb-6 flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <p className="text-sm text-slate-400">WealthOS</p>
+              <h1 className="mt-1 text-3xl font-semibold">Budgets</h1>
+              <p className="mt-1 text-sm text-slate-500">
+                Plan monthly spending, compare actuals, and catch budget risk
+                early.
+              </p>
+            </div>
 
-          <div className="mb-6 flex flex-col gap-4 rounded-2xl border border-slate-800 bg-slate-900 p-5 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <label className="text-sm text-slate-300">Budget Month</label>
+            <div className="flex max-w-full flex-wrap gap-2">
               <input
                 value={selectedMonth}
                 onChange={(event) => setSelectedMonth(event.target.value)}
                 type="month"
-                className="mt-1 block rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                className="min-w-0 rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200 outline-none focus:border-blue-500"
               />
-            </div>
 
-            <div className="flex flex-wrap gap-2">
               <button
                 type="button"
                 onClick={autoFillBudgetFromActuals}
                 disabled={autofilling}
-                className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800 disabled:opacity-60"
+                className="shrink-0 rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-900 disabled:opacity-60"
               >
-                {autofilling ? "Autofilling..." : "Autofill from Actuals"}
+                {autofilling ? "Autofilling..." : "Autofill"}
               </button>
 
               <button
                 type="button"
-                onClick={resetBudget}
-                disabled={resetting}
-                className="rounded-xl border border-red-900 px-4 py-2 text-sm text-red-300 hover:bg-red-950 disabled:opacity-60"
+                onClick={() => setShowAddCategory((current) => !current)}
+                className="shrink-0 rounded-xl bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-500"
               >
-                {resetting ? "Resetting..." : "Reset Budget"}
+                + Add Category
               </button>
             </div>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-5">
-            <SummaryCard
-              title="Planned"
-              value={formatCurrency(summary.totalPlanned)}
-            />
-            <SummaryCard
-              title="Actual"
-              value={formatCurrency(summary.totalActual)}
-            />
-            <SummaryCard
-              title="Remaining"
-              value={formatCurrency(summary.totalRemaining)}
-            />
-            <SummaryCard
-              title="Over Budget"
-              value={String(summary.overBudgetCount)}
-            />
-            <SummaryCard
-              title="Unplanned"
-              value={formatCurrency(summary.unplannedSpending)}
-            />
-          </div>
+          <section className="min-w-0 overflow-hidden rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-sm">
+            <div className="grid min-w-0 gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                  Monthly Budget Control
+                </p>
 
-          <div className="mt-8 grid gap-6 xl:grid-cols-[420px_1fr]">
-            <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-              <h2 className="text-lg font-medium">Add Budget Category</h2>
-              <p className="mt-1 text-sm text-slate-400">
-                Create custom categories and set monthly planned amounts.
-              </p>
+                <p
+                  className={
+                    summary.totalRemaining >= 0
+                      ? "mt-2 break-words text-4xl font-semibold text-emerald-300"
+                      : "mt-2 break-words text-4xl font-semibold text-red-300"
+                  }
+                >
+                  {formatCurrency(summary.totalRemaining)}
+                </p>
+
+                <p className="mt-2 text-sm text-slate-500">
+                  {formatCurrency(summary.totalActual)} spent of{" "}
+                  {formatCurrency(summary.totalPlanned)} planned
+                </p>
+
+                <div className="mt-6">
+                  <div className="flex items-center justify-between text-xs text-slate-500">
+                    <span>Actual spending</span>
+                    <span>Planned budget</span>
+                  </div>
+
+                  <div className="mt-2 h-4 overflow-hidden rounded-full bg-slate-800">
+                    <div
+                      className={
+                        summary.totalPlanned === 0 && summary.totalActual > 0
+                          ? "h-full rounded-full bg-red-500"
+                          : summary.totalRemaining < 0
+                          ? "h-full rounded-full bg-red-500"
+                          : summary.percentUsed >= 80
+                          ? "h-full rounded-full bg-amber-500"
+                          : "h-full rounded-full bg-emerald-500"
+                      }
+                      style={{
+                        width: `${Math.max(
+                          Math.min(summary.percentUsed, 100),
+                          summary.totalActual > 0 ? 4 : 0
+                        )}%`,
+                      }}
+                    />
+                  </div>
+
+                  <p className="mt-2 text-xs text-slate-500">
+                    {summary.totalPlanned === 0
+                      ? "No planned budget yet. Add planned amounts or autofill from actuals."
+                      : `${Math.round(
+                          summary.percentUsed
+                        )}% of planned budget used.`}
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-1">
+                <BudgetMetricTile
+                  title="Planned"
+                  value={formatCurrency(summary.totalPlanned)}
+                  tone="neutral"
+                />
+                <BudgetMetricTile
+                  title="Actual"
+                  value={formatCurrency(summary.totalActual)}
+                  tone="expense"
+                />
+                <BudgetMetricTile
+                  title="Over Budget"
+                  value={String(summary.overBudgetCount)}
+                  tone={summary.overBudgetCount > 0 ? "danger" : "good"}
+                />
+              </div>
+            </div>
+          </section>
+
+          {showAddCategory && (
+            <section className="mt-6 min-w-0 rounded-2xl border border-slate-800 bg-slate-900 p-5">
+              <div className="mb-5 flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h2 className="text-lg font-medium">Add Budget Category</h2>
+                  <p className="mt-1 text-sm text-slate-400">
+                    Create custom categories and set monthly planned amounts.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowAddCategory(false)}
+                  className="shrink-0 rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-400 hover:bg-slate-800"
+                >
+                  Close
+                </button>
+              </div>
 
               <form
                 onSubmit={addCustomCategory}
                 noValidate
-                className="mt-5 space-y-4"
+                className="grid min-w-0 gap-4 lg:grid-cols-[1fr_1fr_auto]"
               >
-                <div>
+                <div className="min-w-0">
                   <label className="text-sm text-slate-300">
                     Category Name
                   </label>
@@ -611,11 +722,11 @@ export default function BudgetPage() {
                     value={newCategoryName}
                     onChange={(event) => setNewCategoryName(event.target.value)}
                     placeholder="Example: Motorcycle Fund"
-                    className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                    className="mt-1 w-full min-w-0 rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
                   />
                 </div>
 
-                <div>
+                <div className="min-w-0">
                   <label className="text-sm text-slate-300">
                     Planned Monthly Amount
                   </label>
@@ -627,27 +738,152 @@ export default function BudgetPage() {
                     type="number"
                     step="1"
                     placeholder="Example: 300"
-                    className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                    className="mt-1 w-full min-w-0 rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                  />
+                </div>
+
+                <div className="flex items-end">
+                  <button
+                    type="submit"
+                    disabled={addingCategory}
+                    className="w-full shrink-0 rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium hover:bg-blue-500 disabled:opacity-60"
+                  >
+                    {addingCategory ? "Adding..." : "Save"}
+                  </button>
+                </div>
+              </form>
+            </section>
+          )}
+
+          <div className="mt-6 grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+            <section className="min-w-0 rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-5">
+              <div className="mb-5 flex min-w-0 flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div className="min-w-0">
+                  <h2 className="text-lg font-medium">Category Budgets</h2>
+                  <p className="text-sm text-slate-400">
+                    {filteredBudgetRows.length} categor
+                    {filteredBudgetRows.length === 1 ? "y" : "ies"} shown
+                  </p>
+                </div>
+
+                <div className="flex max-w-full gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
+                  {(["all", "over", "warning", "unplanned", "good"] as const).map(
+                    (filter) => (
+                      <button
+                        key={filter}
+                        type="button"
+                        onClick={() => setStatusFilter(filter)}
+                        className={
+                          statusFilter === filter
+                            ? "shrink-0 rounded-xl bg-blue-600 px-3 py-2 text-xs font-medium capitalize text-white"
+                            : "shrink-0 rounded-xl border border-slate-700 px-3 py-2 text-xs capitalize text-slate-400 hover:bg-slate-800"
+                        }
+                      >
+                        {filter}
+                      </button>
+                    )
+                  )}
+                </div>
+              </div>
+
+              {filteredBudgetRows.length === 0 ? (
+                <div className="rounded-2xl border border-slate-800 bg-slate-950 p-8 text-center text-slate-500">
+                  No budget categories match this filter.
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-800 overflow-hidden rounded-2xl border border-slate-800 bg-slate-950">
+                  {filteredBudgetRows.map((row) => (
+                    <BudgetFeedRow
+                      key={row.id}
+                      row={row}
+                      savingCategory={savingCategory}
+                      deletingCategory={deletingCategory}
+                      updateBudget={updateBudget}
+                      deleteBudgetCategory={deleteBudgetCategory}
+                    />
+                  ))}
+                </div>
+              )}
+            </section>
+
+            <aside className="min-w-0 space-y-6">
+              <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+                <h2 className="text-lg font-medium">Budget Health</h2>
+
+                <div className="mt-5 space-y-4">
+                  <SideMetric
+                    label="Remaining"
+                    value={formatCurrency(summary.totalRemaining)}
+                    valueClass={
+                      summary.totalRemaining < 0
+                        ? "text-red-300"
+                        : "text-emerald-300"
+                    }
+                  />
+                  <SideMetric
+                    label="Over-budget categories"
+                    value={String(summary.overBudgetCount)}
+                  />
+                  <SideMetric
+                    label="Watchlist categories"
+                    value={String(summary.warningCount)}
+                  />
+                  <SideMetric
+                    label="Unplanned spending"
+                    value={formatCurrency(summary.unplannedSpending)}
                   />
                 </div>
 
                 <button
-                  type="submit"
-                  disabled={addingCategory}
-                  className="w-full rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium hover:bg-blue-500 disabled:opacity-60"
+                  type="button"
+                  onClick={resetBudget}
+                  disabled={resetting}
+                  className="mt-5 w-full rounded-xl border border-red-900 px-4 py-2 text-sm text-red-300 hover:bg-red-950 disabled:opacity-60"
                 >
-                  {addingCategory ? "Adding..." : "Add Category"}
+                  {resetting ? "Resetting..." : "Reset Budget"}
                 </button>
-              </form>
+              </section>
 
-              <div className="mt-6 rounded-xl border border-slate-800 bg-slate-950 p-4">
-                <p className="text-sm font-medium text-slate-200">
-                  Budget Insights
+              <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+                <h2 className="text-lg font-medium">Priority Review</h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Categories needing attention first.
                 </p>
 
-                <div className="mt-4 space-y-4">
+                <div className="mt-5 space-y-3">
+                  {topRiskRows.length === 0 ? (
+                    <p className="text-sm text-slate-500">
+                      No risky categories right now.
+                    </p>
+                  ) : (
+                    topRiskRows.map((row) => (
+                      <div
+                        key={row.id}
+                        className="rounded-xl border border-slate-800 bg-slate-950 p-3"
+                      >
+                        <div className="flex min-w-0 items-center justify-between gap-3">
+                          <p className="truncate text-sm font-medium text-slate-200">
+                            {row.category}
+                          </p>
+                          <StatusBadge status={row.status} />
+                        </div>
+
+                        <p className="mt-2 text-xs text-slate-500">
+                          {formatCurrency(row.actualAmount)} spent of{" "}
+                          {formatCurrency(row.plannedAmount)} planned
+                        </p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </section>
+
+              <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+                <h2 className="text-lg font-medium">Budget Insights</h2>
+
+                <div className="mt-5 space-y-3">
                   <InsightCard
-                    title="Monthly budget status"
+                    title="Monthly status"
                     text={getBudgetSummaryText(summary)}
                   />
 
@@ -659,7 +895,7 @@ export default function BudgetPage() {
                             summary.overBudgetCount
                           } categor${
                             summary.overBudgetCount === 1 ? "y" : "ies"
-                          }. Review those categories first.`
+                          }. Review those first.`
                         : "No categories are over budget right now."
                     }
                   />
@@ -668,121 +904,177 @@ export default function BudgetPage() {
                     title="Next recommendation"
                     text={
                       summary.totalPlanned === 0
-                        ? "Start by entering planned amounts for your major categories."
-                        : "Keep reviewing budgets weekly and adjust categories as spending changes."
+                        ? "Start by entering planned amounts for your biggest categories."
+                        : "Review budgets weekly and adjust categories as spending changes."
                     }
                   />
                 </div>
-              </div>
-            </section>
-
-            <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-              <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-                <div>
-                  <h2 className="text-lg font-medium">Category Budget</h2>
-                  <p className="text-sm text-slate-400">
-                    {budgetRows.length} categor
-                    {budgetRows.length === 1 ? "y" : "ies"} tracked
-                  </p>
-                </div>
-              </div>
-
-              {budgetRows.length === 0 ? (
-                <div className="rounded-2xl border border-slate-800 bg-slate-950 p-8 text-center text-slate-500">
-                  No budget categories yet. Add your first category.
-                </div>
-              ) : (
-                <div className="grid gap-4 xl:grid-cols-2 2xl:grid-cols-3">
-                  {budgetRows.map((row) => (
-                    <div
-                      key={row.id}
-                      className="min-w-0 rounded-2xl border border-slate-800 bg-slate-950 p-4"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="break-words font-medium">
-                            {row.category}
-                          </p>
-                          <p className="mt-1 text-xs text-slate-500">
-                            {Math.round(row.percentUsed)}% used
-                          </p>
-                        </div>
-
-                        <StatusBadge status={row.status} />
-                      </div>
-
-                      <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                        <MiniStat
-                          label="Planned"
-                          value={formatCurrency(row.plannedAmount)}
-                        />
-                        <MiniStat
-                          label="Actual"
-                          value={formatCurrency(row.actualAmount)}
-                        />
-                        <MiniStat
-                          label="Remaining"
-                          value={formatCurrency(row.remaining)}
-                          valueClass={
-                            row.remaining < 0
-                              ? "text-red-300"
-                              : "text-emerald-300"
-                          }
-                        />
-                      </div>
-
-                      <div className="mt-4">
-                        <div className="h-2 w-full rounded-full bg-slate-800">
-                          <div
-                            className={getProgressClass(row.status)}
-                            style={{
-                              width: `${Math.min(row.percentUsed, 100)}%`,
-                            }}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="mt-4">
-                        <label className="text-xs text-slate-400">
-                          Planned Amount
-                        </label>
-                        <input
-                          value={row.plannedAmount}
-                          onChange={(event) =>
-                            updateBudget(row.id, event.target.value)
-                          }
-                          type="number"
-                          step="1"
-                          className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-blue-500"
-                        />
-                        {savingCategory === row.id && (
-                          <p className="mt-1 text-xs text-blue-300">
-                            Saving...
-                          </p>
-                        )}
-                      </div>
-
-                      <div className="mt-4">
-                        <button
-                          type="button"
-                          onClick={() => deleteBudgetCategory(row)}
-                          disabled={deletingCategory === row.id}
-                          className="w-full rounded-xl border border-red-900 px-4 py-2 text-sm text-red-300 hover:bg-red-950 disabled:opacity-60"
-                        >
-                          {deletingCategory === row.id
-                            ? "Deleting..."
-                            : "Delete Category"}
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
+              </section>
+            </aside>
           </div>
         </div>
       </div>
     </main>
+  );
+}
+
+function BudgetFeedRow({
+  row,
+  savingCategory,
+  deletingCategory,
+  updateBudget,
+  deleteBudgetCategory,
+}: {
+  row: BudgetRow;
+  savingCategory: string;
+  deletingCategory: string;
+  updateBudget: (rowId: string, value: string) => void;
+  deleteBudgetCategory: (row: BudgetRow) => void;
+}) {
+  const isOver = row.remaining < 0;
+
+  return (
+    <div className="min-w-0 p-4 sm:p-5">
+      <div className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <p className="truncate text-lg font-semibold text-slate-100">
+              {row.category}
+            </p>
+            <StatusBadge status={row.status} />
+          </div>
+
+          <p className="mt-1 text-sm text-slate-500">
+            {Math.round(row.percentUsed)}% used ·{" "}
+            {isOver
+              ? `${formatCurrency(Math.abs(row.remaining))} over`
+              : `${formatCurrency(row.remaining)} remaining`}
+          </p>
+
+          <div className="mt-4 h-3 overflow-hidden rounded-full bg-slate-800">
+            <div
+              className={getProgressClass(row.status)}
+              style={{
+                width: `${Math.max(
+                  Math.min(row.percentUsed, 100),
+                  row.actualAmount > 0 ? 4 : 0
+                )}%`,
+              }}
+            />
+          </div>
+        </div>
+
+        <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start lg:shrink-0">
+          <div className="w-full sm:w-40">
+            <label className="text-xs text-slate-500">Planned</label>
+            <input
+              value={row.plannedAmount}
+              onChange={(event) => updateBudget(row.id, event.target.value)}
+              type="number"
+              step="1"
+              className="mt-1 w-full min-w-0 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm font-medium text-slate-100 outline-none focus:border-blue-500"
+            />
+            {savingCategory === row.id && (
+              <p className="mt-1 text-xs text-blue-300">Saving...</p>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => deleteBudgetCategory(row)}
+            disabled={deletingCategory === row.id}
+            className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-400 hover:border-red-900 hover:bg-red-950 hover:text-red-300 disabled:opacity-60 sm:mt-5"
+          >
+            {deletingCategory === row.id ? "..." : "Delete"}
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-5 grid min-w-0 gap-3 sm:grid-cols-3">
+        <BudgetMiniStat
+          label="Planned"
+          value={formatCurrency(row.plannedAmount)}
+        />
+        <BudgetMiniStat
+          label="Actual"
+          value={formatCurrency(row.actualAmount)}
+        />
+        <BudgetMiniStat
+          label="Remaining"
+          value={formatCurrency(row.remaining)}
+          valueClass={isOver ? "text-red-300" : "text-emerald-300"}
+        />
+      </div>
+    </div>
+  );
+}
+
+function BudgetMetricTile({
+  title,
+  value,
+  tone,
+}: {
+  title: string;
+  value: string;
+  tone: "good" | "expense" | "danger" | "neutral";
+}) {
+  return (
+    <div className="min-w-0 rounded-2xl border border-slate-800 bg-slate-950 p-4">
+      <p className="text-sm text-slate-500">{title}</p>
+      <p
+        className={
+          tone === "good"
+            ? "mt-2 break-words text-2xl font-semibold text-emerald-300"
+            : tone === "expense"
+            ? "mt-2 break-words text-2xl font-semibold text-red-300"
+            : tone === "danger"
+            ? "mt-2 break-words text-2xl font-semibold text-amber-300"
+            : "mt-2 break-words text-2xl font-semibold text-slate-200"
+        }
+      >
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function BudgetMiniStat({
+  label,
+  value,
+  valueClass = "text-slate-100",
+}: {
+  label: string;
+  value: string;
+  valueClass?: string;
+}) {
+  return (
+    <div className="min-w-0 rounded-2xl border border-slate-800 bg-slate-900/80 p-4">
+      <p className="text-xs font-medium uppercase tracking-[0.14em] text-slate-500">
+        {label}
+      </p>
+      <p className={`mt-2 break-words text-lg font-semibold ${valueClass}`}>
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function SideMetric({
+  label,
+  value,
+  valueClass = "text-slate-100",
+}: {
+  label: string;
+  value: string;
+  valueClass?: string;
+}) {
+  return (
+    <div className="flex min-w-0 items-center justify-between gap-3 border-b border-slate-800 pb-3">
+      <span className="min-w-0 text-sm text-slate-400">{label}</span>
+      <span className={`shrink-0 text-sm font-medium ${valueClass}`}>
+        {value}
+      </span>
+    </div>
   );
 }
 
@@ -806,15 +1098,15 @@ function getBudgetSummaryText(summary: {
   )} over your planned budget.`;
 }
 
-function getProgressClass(status: string) {
-  const base = "h-2 rounded-full ";
+function getProgressClass(status: BudgetRowStatus) {
+  const base = "h-3 rounded-full ";
 
   if (status === "over" || status === "unplanned") return base + "bg-red-500";
   if (status === "warning") return base + "bg-amber-500";
   return base + "bg-emerald-500";
 }
 
-function StatusBadge({ status }: { status: string }) {
+function StatusBadge({ status }: { status: BudgetRowStatus }) {
   const styles =
     status === "over" || status === "unplanned"
       ? "bg-red-500/10 text-red-300"
@@ -840,37 +1132,9 @@ function StatusBadge({ status }: { status: string }) {
 
 function InsightCard({ title, text }: { title: string; text: string }) {
   return (
-    <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+    <div className="min-w-0 rounded-xl border border-slate-800 bg-slate-950 p-4">
       <p className="text-sm font-medium text-slate-200">{title}</p>
       <p className="mt-1 text-sm text-slate-400">{text}</p>
-    </div>
-  );
-}
-
-function MiniStat({
-  label,
-  value,
-  valueClass = "text-slate-200",
-}: {
-  label: string;
-  value: string;
-  valueClass?: string;
-}) {
-  return (
-    <div className="rounded-xl border border-slate-800 bg-slate-900 p-3">
-      <p className="text-xs text-slate-500">{label}</p>
-      <p className={`mt-1 break-words text-sm font-medium ${valueClass}`}>
-        {value}
-      </p>
-    </div>
-  );
-}
-
-function SummaryCard({ title, value }: { title: string; value: string }) {
-  return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-      <p className="text-sm text-slate-400">{title}</p>
-      <p className="mt-2 text-2xl font-semibold">{value}</p>
     </div>
   );
 }
