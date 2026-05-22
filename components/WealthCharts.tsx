@@ -29,8 +29,11 @@ type CashFlowData = {
 type SpendingCategory = {
   category: string;
   amount: number;
+  children?: Array<{
+    name: string;
+    amount: number;
+  }>;
 };
-
 type BudgetRow = {
   category: string;
   planned: number;
@@ -222,7 +225,6 @@ export function GoalProgressChart({ data }: { data: GoalRow[] }) {
     </ChartCard>
   );
 }
-
 export function MoneyFlowSankey({
   income,
   spendingCategories,
@@ -235,52 +237,249 @@ export function MoneyFlowSankey({
   goalsContribution: number;
 }) {
   const chartWidth = 1180;
-  const chartHeight = 620;
+  const chartHeight = 680;
 
   const safeIncome = Math.max(Number(income || 0), 0);
   const safeGoalsContribution = Math.max(Number(goalsContribution || 0), 0);
   const safeRemainingCashFlow = Number(remainingCashFlow || 0);
 
   const preparedData = useMemo(() => {
-    const spendingRows = spendingCategories
+    const categoryRows = spendingCategories
       .filter((item) => Number(item.amount || 0) > 0)
       .sort((a, b) => Number(b.amount || 0) - Number(a.amount || 0));
 
-    const visibleSpending = spendingRows.slice(0, 6);
-    const otherSpending = spendingRows
+    const visibleCategories = categoryRows.slice(0, 6);
+    const otherCategoryTotal = categoryRows
       .slice(6)
       .reduce((sum, item) => sum + Number(item.amount || 0), 0);
 
-    const spendingDestinationRows = visibleSpending.map((item, index) => ({
-      id: `spending-${sanitizeId(item.category)}-${index}`,
+    const categoryDestinationRows = visibleCategories.map((item, index) => ({
+      id: `category-${sanitizeId(item.category)}-${index}`,
       name: item.category,
       value: Number(item.amount || 0),
       color: CATEGORY_COLORS[index % CATEGORY_COLORS.length],
       emoji: getCategoryEmoji(item.category),
-      group: "spending" as const,
+      children: (item.children || [])
+        .filter((child) => Number(child.amount || 0) > 0)
+        .sort((a, b) => Number(b.amount || 0) - Number(a.amount || 0))
+        .slice(0, 4)
+        .map((child, childIndex) => ({
+          id: `merchant-${sanitizeId(item.category)}-${sanitizeId(
+            child.name
+          )}-${index}-${childIndex}`,
+          name: child.name,
+          value: Number(child.amount || 0),
+          color: CATEGORY_COLORS[index % CATEGORY_COLORS.length],
+          emoji: getCategoryEmoji(item.category),
+        })),
     }));
 
-    if (otherSpending > 0) {
-      spendingDestinationRows.push({
-        id: "other-spending",
+    if (otherCategoryTotal > 0) {
+      categoryDestinationRows.push({
+        id: "category-other-spending",
         name: "Other Spending",
-        value: otherSpending,
+        value: otherCategoryTotal,
         color: "#64748b",
         emoji: "•",
-        group: "spending",
+        children: [],
       });
     }
 
-    const spendingTotal = spendingDestinationRows.reduce(
+    const spendingTotal = categoryDestinationRows.reduce(
       (sum, row) => sum + row.value,
       0
     );
 
-    const positiveRemaining = Math.max(safeRemainingCashFlow, 0);
-    const cashFlowGap = Math.max(-safeRemainingCashFlow, 0);
+    const totalUses = spendingTotal + safeGoalsContribution;
+
+    const calculatedSurplus = Math.max(safeIncome - totalUses, 0);
+    const calculatedDeficit = Math.max(totalUses - safeIncome, 0);
+
+    const positiveRemaining =
+      safeRemainingCashFlow > 0
+        ? Math.max(safeRemainingCashFlow, calculatedSurplus)
+        : calculatedSurplus;
+
+    const deficitFunding =
+      safeRemainingCashFlow < 0
+        ? Math.max(Math.abs(safeRemainingCashFlow), calculatedDeficit)
+        : calculatedDeficit;
+
+    const incomeToSpending = Math.min(safeIncome, spendingTotal);
+    const incomeAfterSpending = Math.max(safeIncome - incomeToSpending, 0);
+
+    const incomeToGoals = Math.min(incomeAfterSpending, safeGoalsContribution);
+    const goalDeficit = Math.max(safeGoalsContribution - incomeToGoals, 0);
+
+    const spendingDeficit = Math.max(spendingTotal - incomeToSpending, 0);
+
+    const incomeToRemaining = Math.max(
+      safeIncome - incomeToSpending - incomeToGoals,
+      0
+    );
+
+    const totalDeficitToShow = spendingDeficit + goalDeficit;
+
+    const nodes: SankeyNodeDatum[] = [
+      ...(safeIncome > 0
+        ? [
+            {
+              id: "source",
+              name: "Income",
+              color: "#16a34a",
+              emoji: "💰",
+            },
+          ]
+        : []),
+      ...(totalDeficitToShow > 0 || deficitFunding > 0
+        ? [
+            {
+              id: "deficit-source",
+              name: "Deficit Funding",
+              color: "#f97316",
+              emoji: "⚠️",
+            },
+          ]
+        : []),
+      ...(spendingTotal > 0
+        ? [
+            {
+              id: "spending-group",
+              name: "Spending",
+              color: "#ef4444",
+              emoji: "",
+            },
+          ]
+        : []),
+      ...(safeGoalsContribution > 0
+        ? [
+            {
+              id: "goals",
+              name: "Goals",
+              color: "#3b82f6",
+              emoji: "🎯",
+            },
+          ]
+        : []),
+      ...(positiveRemaining > 0 || incomeToRemaining > 0
+        ? [
+            {
+              id: "remaining-cash",
+              name: "Remaining Cash",
+              color: "#10b981",
+              emoji: "💵",
+            },
+          ]
+        : []),
+      ...categoryDestinationRows.map((row) => ({
+        id: row.id,
+        name: row.name,
+        color: row.color,
+        emoji: row.emoji,
+      })),
+      ...categoryDestinationRows.flatMap((row) =>
+        row.children.map((child) => ({
+          id: child.id,
+          name: child.name,
+          color: child.color,
+          emoji: child.emoji,
+        }))
+      ),
+    ];
+
+    const links: SankeyLinkDatum[] = [];
+
+    if (safeIncome > 0 && incomeToSpending > 0) {
+      links.push({
+        source: "source",
+        target: "spending-group",
+        value: incomeToSpending,
+      });
+    }
+
+    if (spendingDeficit > 0) {
+      links.push({
+        source: "deficit-source",
+        target: "spending-group",
+        value: spendingDeficit,
+      });
+    }
+
+    if (safeIncome > 0 && incomeToGoals > 0) {
+      links.push({
+        source: "source",
+        target: "goals",
+        value: incomeToGoals,
+      });
+    }
+
+    if (goalDeficit > 0) {
+      links.push({
+        source: "deficit-source",
+        target: "goals",
+        value: goalDeficit,
+      });
+    }
+
+    if (incomeToRemaining > 0) {
+      links.push({
+        source: "source",
+        target: "remaining-cash",
+        value: incomeToRemaining,
+      });
+    }
+
+    categoryDestinationRows.forEach((category) => {
+      links.push({
+        source: "spending-group",
+        target: category.id,
+        value: category.value,
+      });
+
+      const childTotal = category.children.reduce(
+        (sum, child) => sum + child.value,
+        0
+      );
+
+      category.children.forEach((child) => {
+        links.push({
+          source: category.id,
+          target: child.id,
+          value: child.value,
+        });
+      });
+
+      const uncategorizedCategoryRemainder = Math.max(
+        category.value - childTotal,
+        0
+      );
+
+      if (uncategorizedCategoryRemainder > 0 && category.children.length > 0) {
+        const otherChildId = `${category.id}-other`;
+
+        nodes.push({
+          id: otherChildId,
+          name: `Other ${category.name}`,
+          color: category.color,
+          emoji: "•",
+        });
+
+        links.push({
+          source: category.id,
+          target: otherChildId,
+          value: uncategorizedCategoryRemainder,
+        });
+      }
+    });
 
     const destinationRows = [
-      ...spendingDestinationRows,
+      ...categoryDestinationRows.map((row) => ({
+        id: row.id,
+        name: row.name,
+        value: row.value,
+        color: row.color,
+        emoji: row.emoji,
+      })),
       ...(safeGoalsContribution > 0
         ? [
             {
@@ -289,169 +488,49 @@ export function MoneyFlowSankey({
               value: safeGoalsContribution,
               color: "#3b82f6",
               emoji: "🎯",
-              group: "goal" as const,
             },
           ]
         : []),
-      ...(positiveRemaining > 0
+      ...(incomeToRemaining > 0
         ? [
             {
               id: "remaining-cash",
               name: "Remaining Cash",
-              value: positiveRemaining,
+              value: incomeToRemaining,
               color: "#10b981",
               emoji: "💵",
-              group: "remaining" as const,
             },
           ]
         : []),
-      ...(cashFlowGap > 0
+      ...(totalDeficitToShow > 0
         ? [
             {
-              id: "cash-flow-gap",
-              name: "Cash Flow Gap",
-              value: cashFlowGap,
+              id: "deficit-source",
+              name: "Deficit Funding",
+              value: totalDeficitToShow,
               color: "#f97316",
               emoji: "⚠️",
-              group: "gap" as const,
             },
           ]
         : []),
     ];
 
-    const estimatedFlow =
-      spendingTotal + safeGoalsContribution + positiveRemaining + cashFlowGap;
-
-    const displayIncome = safeIncome > 0 ? safeIncome : estimatedFlow;
-
-    const nodes: SankeyNodeDatum[] = [
-      {
-        id: "source",
-        name: "Income",
-        color: "#16a34a",
-        emoji: "💰",
-      },
-      {
-        id: "spending-group",
-        name: "Spending",
-        color: "#ef4444",
-        emoji: "",
-      },
-      ...(safeGoalsContribution > 0
-        ? [
-            {
-              id: "goal-group",
-              name: "Goals",
-              color: "#3b82f6",
-              emoji: "",
-            },
-          ]
-        : []),
-      ...(positiveRemaining > 0
-        ? [
-            {
-              id: "remaining-group",
-              name: "Remaining",
-              color: "#10b981",
-              emoji: "",
-            },
-          ]
-        : []),
-      ...(cashFlowGap > 0
-        ? [
-            {
-              id: "gap-group",
-              name: "Gap",
-              color: "#f97316",
-              emoji: "",
-            },
-          ]
-        : []),
-      ...destinationRows.map((row) => ({
-        id: row.id,
-        name: row.name,
-        color: row.color,
-        emoji: row.emoji,
-      })),
-    ];
-
-    const links: SankeyLinkDatum[] = [];
-
-    if (displayIncome > 0 && spendingTotal > 0) {
-      links.push({
-        source: "source",
-        target: "spending-group",
-        value: spendingTotal,
-      });
-    }
-
-    if (displayIncome > 0 && safeGoalsContribution > 0) {
-      links.push({
-        source: "source",
-        target: "goal-group",
-        value: safeGoalsContribution,
-      });
-    }
-
-    if (displayIncome > 0 && positiveRemaining > 0) {
-      links.push({
-        source: "source",
-        target: "remaining-group",
-        value: positiveRemaining,
-      });
-    }
-
-    if (displayIncome > 0 && cashFlowGap > 0) {
-      links.push({
-        source: "source",
-        target: "gap-group",
-        value: cashFlowGap,
-      });
-    }
-
-    destinationRows.forEach((row) => {
-      if (row.group === "spending") {
-        links.push({
-          source: "spending-group",
-          target: row.id,
-          value: row.value,
-        });
-      }
-
-      if (row.group === "goal") {
-        links.push({
-          source: "goal-group",
-          target: row.id,
-          value: row.value,
-        });
-      }
-
-      if (row.group === "remaining") {
-        links.push({
-          source: "remaining-group",
-          target: row.id,
-          value: row.value,
-        });
-      }
-
-      if (row.group === "gap") {
-        links.push({
-          source: "gap-group",
-          target: row.id,
-          value: row.value,
-        });
-      }
-    });
+    const totalFlow = Math.max(
+      safeIncome + totalDeficitToShow,
+      spendingTotal + safeGoalsContribution + incomeToRemaining,
+      1
+    );
 
     return {
       nodes,
       links: links.filter((link) => link.value > 0),
       destinationRows,
-      displayIncome,
+      displayIncome: safeIncome,
       spendingTotal,
-      positiveRemaining,
-      cashFlowGap,
-      totalFlow: Math.max(displayIncome, estimatedFlow, 1),
+      positiveRemaining: incomeToRemaining,
+      cashFlowGap: totalDeficitToShow,
+      deficitFunding: totalDeficitToShow,
+      totalFlow,
     };
   }, [
     spendingCategories,
@@ -464,7 +543,7 @@ export function MoneyFlowSankey({
     const generator = sankey<SankeyNodeDatum, SankeyLinkDatum>()
       .nodeId((node) => node.id)
       .nodeWidth(16)
-      .nodePadding(34)
+      .nodePadding(28)
       .nodeAlign(sankeyCenter)
       .extent([
         [36, 32],
@@ -492,8 +571,8 @@ export function MoneyFlowSankey({
         <div>
           <h2 className="text-lg font-medium text-slate-100">Money Flow</h2>
           <p className="mt-1 text-sm text-slate-400">
-            Connected weighted flow of income into spending, goals, and
-            remaining cash.
+            Income, deficit funding, spending groups, categories, merchants,
+            goals, and remaining cash.
           </p>
         </div>
 
@@ -522,16 +601,17 @@ export function MoneyFlowSankey({
               </div>
 
               <div className="rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 shadow-sm">
-                By category & group
+                By category & merchant
               </div>
             </div>
 
-            <div className="w-full overflow-x-auto px-4 py-8">
+            <div className="w-full overflow-hidden px-4 py-8">
               <svg
-                width={chartWidth}
+                width="100%"
                 height={chartHeight}
                 viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-                className="min-w-[1000px]"
+                preserveAspectRatio="xMidYMid meet"
+                className="block max-w-full"
               >
                 <defs>
                   {graph.links.map((link, index) => {
@@ -557,17 +637,19 @@ export function MoneyFlowSankey({
                         <stop
                           offset="0%"
                           stopColor={source.color}
-                          stopOpacity={source.id === "source" ? 0.22 : 0.3}
+                          stopOpacity={
+                            source.id === "source" ? 0.22 : 0.34
+                          }
                         />
                         <stop
                           offset="50%"
                           stopColor={target.color}
-                          stopOpacity={0.2}
+                          stopOpacity={0.22}
                         />
                         <stop
                           offset="100%"
                           stopColor={target.color}
-                          stopOpacity={0.38}
+                          stopOpacity={0.4}
                         />
                       </linearGradient>
                     );
@@ -613,12 +695,8 @@ export function MoneyFlowSankey({
                     const value = Number(node.value || 0);
                     const centerY = ((node.y0 || 0) + (node.y1 || 0)) / 2;
 
-                    const isSource = node.id === "source";
-                    const isMiddle =
-                      node.id === "spending-group" ||
-                      node.id === "goal-group" ||
-                      node.id === "remaining-group" ||
-                      node.id === "gap-group";
+                    const isSource =
+                      node.id === "source" || node.id === "deficit-source";
                     const isRightSide = (node.x0 || 0) > chartWidth * 0.64;
 
                     const labelX =
@@ -647,33 +725,22 @@ export function MoneyFlowSankey({
                           x={labelX}
                           y={centerY - 10}
                           textAnchor={textAnchor}
-                          className="fill-zinc-900 text-[15px] font-medium"
+                          className="fill-zinc-900 text-[14px] font-medium"
                         >
                           {node.emoji ? `${node.emoji} ` : ""}
-                          {node.name}
+                          {truncateLabel(node.name, 28)}
                         </text>
 
                         <text
                           x={labelX}
                           y={centerY + 13}
                           textAnchor={textAnchor}
-                          className="fill-zinc-950 text-[15px] font-semibold"
+                          className="fill-zinc-950 text-[14px] font-semibold"
                         >
                           {isSource
                             ? `${formatCurrency(value)}`
                             : `${formatCurrency(value)} (${getPercent(value)})`}
                         </text>
-
-                        {isMiddle && (
-                          <text
-                            x={labelX}
-                            y={centerY + 34}
-                            textAnchor={textAnchor}
-                            className="fill-zinc-500 text-[12px]"
-                          >
-                            Group
-                          </text>
-                        )}
                       </g>
                     );
                   })}
@@ -683,12 +750,25 @@ export function MoneyFlowSankey({
           </div>
 
           <div className="rounded-3xl border border-slate-800 bg-slate-950 p-4 xl:hidden">
-            <div className="rounded-2xl border border-emerald-900 bg-emerald-950/30 p-4">
-              <p className="text-xs text-emerald-300">Income</p>
-              <p className="mt-1 text-2xl font-semibold text-emerald-100">
-                {formatCurrency(preparedData.displayIncome)}
-              </p>
-              <p className="mt-1 text-xs text-slate-500">100%</p>
+            <div className="grid gap-3">
+              <div className="rounded-2xl border border-emerald-900 bg-emerald-950/30 p-4">
+                <p className="text-xs text-emerald-300">Income</p>
+                <p className="mt-1 text-2xl font-semibold text-emerald-100">
+                  {formatCurrency(preparedData.displayIncome)}
+                </p>
+              </div>
+
+              {preparedData.deficitFunding > 0 && (
+                <div className="rounded-2xl border border-amber-900 bg-amber-950/30 p-4">
+                  <p className="text-xs text-amber-300">Deficit Funding</p>
+                  <p className="mt-1 text-2xl font-semibold text-amber-100">
+                    {formatCurrency(preparedData.deficitFunding)}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Spending/goals exceeded monthly income.
+                  </p>
+                </div>
+              )}
             </div>
 
             <div className="mx-auto my-4 h-8 w-1 rounded-full bg-gradient-to-b from-emerald-500 to-blue-500" />
@@ -750,14 +830,20 @@ export function MoneyFlowSankey({
             />
 
             <FlowMetric
-              title={safeRemainingCashFlow >= 0 ? "Remaining Flow" : "Cash Gap"}
-              value={formatCurrency(Math.abs(safeRemainingCashFlow))}
-              subtitle={
-                safeRemainingCashFlow >= 0
-                  ? "Money left after spending"
-                  : "Spending is above income"
+              title={
+                preparedData.cashFlowGap > 0 ? "Deficit Funding" : "Remaining Flow"
               }
-              tone={safeRemainingCashFlow >= 0 ? "remaining" : "danger"}
+              value={
+                preparedData.cashFlowGap > 0
+                  ? formatCurrency(preparedData.cashFlowGap)
+                  : formatCurrency(preparedData.positiveRemaining)
+              }
+              subtitle={
+                preparedData.cashFlowGap > 0
+                  ? "Spending/goals exceeded income"
+                  : "Money left after spending and goals"
+              }
+              tone={preparedData.cashFlowGap > 0 ? "danger" : "remaining"}
             />
           </div>
         </>
@@ -999,4 +1085,8 @@ function formatCurrency(value: number) {
     currency: "USD",
     maximumFractionDigits: 0,
   }).format(value || 0);
+}
+function truncateLabel(value: string, maxLength: number) {
+  if (value.length <= maxLength) return value;
+  return `${value.slice(0, maxLength - 1)}…`;
 }

@@ -12,7 +12,11 @@ import {
   MoneyFlowSankey,
   TopSpendingChart,
 } from "@/components/WealthCharts";
-// import MonarchSankey from "@/components/MonarchSankey";
+import PageHeader from "@/components/ui/PageHeader";
+import Panel from "@/components/ui/Panel";
+import MetricCard from "@/components/ui/MetricCard";
+import ActionButton from "@/components/ui/ActionButton";
+import StatusPill from "@/components/ui/StatusPill";
 
 type AccountType =
   | "checking"
@@ -284,55 +288,55 @@ export default function InsightsPage() {
     };
   }, [monthlyTransactions]);
 
- const topSpendingCategories = useMemo(() => {
-  const categoryMap = new Map<
-    string,
-    {
-      amount: number;
-      children: Map<string, number>;
-    }
-  >();
+  const topSpendingCategories = useMemo(() => {
+    const categoryMap = new Map<
+      string,
+      {
+        amount: number;
+        children: Map<string, number>;
+      }
+    >();
 
-  monthlyTransactions
-    .filter((transaction) => transaction.transaction_type === "expense")
-    .forEach((transaction) => {
-      const category = transaction.category || "Uncategorized";
-      const merchant =
-        transaction.merchant_name ||
-        transaction.name ||
-        "Other Transactions";
+    monthlyTransactions
+      .filter((transaction) => transaction.transaction_type === "expense")
+      .forEach((transaction) => {
+        const category = transaction.category || "Uncategorized";
+        const merchant =
+          transaction.merchant_name ||
+          transaction.name ||
+          "Other Transactions";
 
-      const amount = Math.abs(Number(transaction.amount || 0));
+        const amount = Math.abs(Number(transaction.amount || 0));
 
-      const existing = categoryMap.get(category) || {
-        amount: 0,
-        children: new Map<string, number>(),
-      };
+        const existing = categoryMap.get(category) || {
+          amount: 0,
+          children: new Map<string, number>(),
+        };
 
-      existing.amount += amount;
-      existing.children.set(
-        merchant,
-        (existing.children.get(merchant) || 0) + amount
-      );
+        existing.amount += amount;
+        existing.children.set(
+          merchant,
+          (existing.children.get(merchant) || 0) + amount
+        );
 
-      categoryMap.set(category, existing);
-    });
+        categoryMap.set(category, existing);
+      });
 
-  return Array.from(categoryMap.entries())
-    .map(([category, data]) => ({
-      category,
-      amount: data.amount,
-      children: Array.from(data.children.entries())
-        .map(([name, amount]) => ({
-          name,
-          amount,
-        }))
-        .sort((a, b) => b.amount - a.amount)
-        .slice(0, 5),
-    }))
-    .sort((a, b) => b.amount - a.amount)
-    .slice(0, 8);
-}, [monthlyTransactions]);
+    return Array.from(categoryMap.entries())
+      .map(([category, data]) => ({
+        category,
+        amount: data.amount,
+        children: Array.from(data.children.entries())
+          .map(([name, amount]) => ({
+            name,
+            amount,
+          }))
+          .sort((a, b) => b.amount - a.amount)
+          .slice(0, 5),
+      }))
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 8);
+  }, [monthlyTransactions]);
 
   const budgetSummary = useMemo(() => {
     const expenseTransactions = monthlyTransactions.filter(
@@ -506,7 +510,9 @@ export default function InsightsPage() {
     if (topSpendingCategories.length > 0) {
       insights.push({
         title: "Largest spending category",
-        detail: `${topSpendingCategories[0].category} is your largest spending category this month at ${formatCurrency(
+        detail: `${
+          topSpendingCategories[0].category
+        } is your largest spending category this month at ${formatCurrency(
           topSpendingCategories[0].amount
         )}.`,
         severity: "info",
@@ -589,7 +595,7 @@ export default function InsightsPage() {
         <AppNav userEmail={userEmail} />
 
         <div className="min-w-0 flex-1">
-          <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+          <div className="mx-auto w-full max-w-7xl overflow-x-hidden px-4 py-6 pb-28 sm:px-6 lg:px-8 md:pb-6">
             Loading insights...
           </div>
         </div>
@@ -602,46 +608,35 @@ export default function InsightsPage() {
       <AppNav userEmail={userEmail} />
 
       <div className="min-w-0 flex-1">
-        <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-          <section className="overflow-hidden rounded-3xl border border-slate-800 bg-gradient-to-br from-slate-900 via-slate-900 to-blue-950/50 p-6 md:p-8">
-            <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
-              <div>
-                <p className="text-sm text-blue-300">WealthOS Intelligence</p>
-
-                <h1 className="mt-2 text-3xl font-semibold tracking-tight md:text-4xl">
-                  Insights
-                </h1>
-
-                <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-400">
-                  Review your financial snapshot, visual trends, money flow, and
-                  AI-generated analysis from your Supabase data.
-                </p>
-              </div>
-
-              <button
-                type="button"
+        <div className="mx-auto w-full max-w-7xl overflow-x-hidden px-4 py-6 pb-28 sm:px-6 lg:px-8 md:pb-8">
+          <PageHeader
+            eyebrow="WealthOS Intelligence"
+            title="Insights"
+            description="Review your financial snapshot, visual trends, money flow, and AI-generated analysis from your Supabase data."
+            actions={
+              <ActionButton
+                variant="primary"
                 onClick={generateAiInsights}
                 disabled={generating}
-                className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-60"
               >
                 {generating ? "Generating..." : "Generate AI Insights"}
-              </button>
-            </div>
-          </section>
+              </ActionButton>
+            }
+          />
 
-          <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <section className="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-4">
             <MetricCard
               title="Net Worth"
               value={formatCurrency(accountSummary.netWorth)}
               subtitle={`${formatCurrency(accountSummary.assets)} assets`}
-              tone={accountSummary.netWorth >= 0 ? "good" : "danger"}
+              tone={accountSummary.netWorth >= 0 ? "good" : "bad"}
             />
 
             <MetricCard
               title="Monthly Cash Flow"
               value={formatCurrency(monthlySummary.cashFlow)}
               subtitle={`${formatCurrency(monthlySummary.income)} income`}
-              tone={monthlySummary.cashFlow >= 0 ? "good" : "danger"}
+              tone={monthlySummary.cashFlow >= 0 ? "good" : "bad"}
             />
 
             <MetricCard
@@ -657,40 +652,50 @@ export default function InsightsPage() {
               title="Goal Progress"
               value={`${Math.round(goalSummary.progress)}%`}
               subtitle={`${formatCurrency(goalSummary.remaining)} remaining`}
-              tone={goalSummary.progress >= 50 ? "good" : "info"}
+              tone={goalSummary.progress >= 50 ? "good" : "muted"}
             />
           </section>
 
-          <section className="mt-6 grid gap-6 xl:grid-cols-2">
-            <CashFlowBreakdownChart
-              data={{
-                income: monthlySummary.income,
-                spending: monthlySummary.spending,
-                cashFlow: monthlySummary.cashFlow,
-              }}
-            />
+          <section className="mt-6 grid min-w-0 gap-6 xl:grid-cols-2">
+            <div className="min-w-0 overflow-hidden">
+              <CashFlowBreakdownChart
+                data={{
+                  income: monthlySummary.income,
+                  spending: monthlySummary.spending,
+                  cashFlow: monthlySummary.cashFlow,
+                }}
+              />
+            </div>
 
-            <TopSpendingChart data={topSpendingCategories} />
+            <div className="min-w-0 overflow-hidden">
+              <TopSpendingChart data={topSpendingCategories} />
+            </div>
 
-            <BudgetPlannedActualChart data={budgetChartRows} />
+            <div className="min-w-0 overflow-hidden">
+              <BudgetPlannedActualChart data={budgetChartRows} />
+            </div>
 
-            <GoalProgressChart data={goalsChartRows} />
+            <div className="min-w-0 overflow-hidden">
+              <GoalProgressChart data={goalsChartRows} />
+            </div>
           </section>
 
-<section className="mt-6">
-  <MoneyFlowSankey
-    income={monthlySummary.income}
-    spendingCategories={topSpendingCategories}
-    remainingCashFlow={monthlySummary.cashFlow}
-    goalsContribution={estimatedGoalsContribution}
-  />
-</section>
+          <section className="mt-6 min-w-0 overflow-hidden">
+            <div className="min-w-0 max-w-full overflow-hidden [&_*]:max-w-full [&_svg]:max-w-full">
+              <MoneyFlowSankey
+                income={monthlySummary.income}
+                spendingCategories={topSpendingCategories}
+                remainingCashFlow={monthlySummary.cashFlow}
+                goalsContribution={estimatedGoalsContribution}
+              />
+            </div>
+          </section>
 
-          <section className="mt-6 grid gap-6 xl:grid-cols-[1fr_420px]">
-            <div className="space-y-6">
-              <section className="rounded-3xl border border-slate-800 bg-slate-900 p-5">
-                <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-                  <div>
+          <section className="mt-6 grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
+            <div className="min-w-0 space-y-6">
+              <Panel className="rounded-3xl">
+                <div className="mb-5 flex min-w-0 flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                  <div className="min-w-0">
                     <h2 className="text-lg font-medium">AI Analysis</h2>
 
                     <p className="text-sm text-slate-400">
@@ -699,11 +704,7 @@ export default function InsightsPage() {
                     </p>
                   </div>
 
-                  {aiInsights && (
-                    <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-xs text-emerald-300">
-                      Generated
-                    </span>
-                  )}
+                  {aiInsights && <StatusPill tone="good">Generated</StatusPill>}
                 </div>
 
                 {!aiInsights ? (
@@ -718,14 +719,14 @@ export default function InsightsPage() {
                       safe rule-based fallback.
                     </p>
 
-                    <button
-                      type="button"
+                    <ActionButton
+                      variant="primary"
                       onClick={generateAiInsights}
                       disabled={generating}
-                      className="mt-5 rounded-xl bg-blue-600 px-5 py-3 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-60"
+                      className="mt-5"
                     >
                       {generating ? "Generating..." : "Generate AI Insights"}
-                    </button>
+                    </ActionButton>
                   </div>
                 ) : (
                   <div className="space-y-5">
@@ -739,7 +740,7 @@ export default function InsightsPage() {
                       </p>
                     </div>
 
-                    <div className="grid gap-4 md:grid-cols-2">
+                    <div className="grid min-w-0 gap-4 md:grid-cols-2">
                       {aiInsights.insights.map((insight) => (
                         <InsightCard
                           key={insight.title}
@@ -774,16 +775,16 @@ export default function InsightsPage() {
                     </div>
                   </div>
                 )}
-              </section>
+              </Panel>
 
-              <section className="rounded-3xl border border-slate-800 bg-slate-900 p-5">
+              <Panel className="rounded-3xl">
                 <h2 className="text-lg font-medium">Rule-Based Insights</h2>
 
                 <p className="mt-1 text-sm text-slate-400">
                   Always available, even without an AI API key.
                 </p>
 
-                <div className="mt-5 grid gap-4 md:grid-cols-2">
+                <div className="mt-5 grid min-w-0 gap-4 md:grid-cols-2">
                   {ruleBasedInsights.map((insight) => (
                     <InsightCard
                       key={insight.title}
@@ -793,11 +794,11 @@ export default function InsightsPage() {
                     />
                   ))}
                 </div>
-              </section>
+              </Panel>
             </div>
 
-            <aside className="space-y-6">
-              <section className="rounded-3xl border border-slate-800 bg-slate-900 p-5">
+            <aside className="min-w-0 space-y-6">
+              <Panel className="rounded-3xl">
                 <h2 className="text-lg font-medium">Data Readiness</h2>
 
                 <p className="mt-1 text-sm text-slate-400">
@@ -833,59 +834,26 @@ export default function InsightsPage() {
                     href="/goals"
                   />
                 </div>
-              </section>
+              </Panel>
 
-              <section className="rounded-3xl border border-slate-800 bg-slate-900 p-5">
+              <Panel className="rounded-3xl">
                 <h2 className="text-lg font-medium">Quick Actions</h2>
 
                 <div className="mt-5 grid gap-3">
                   <QuickAction href="/accounts" label="Update Accounts" />
 
-                  <QuickAction
-                    href="/transactions"
-                    label="Add Transactions"
-                  />
+                  <QuickAction href="/transactions" label="Add Transactions" />
 
                   <QuickAction href="/budgets" label="Review Budgets" />
 
                   <QuickAction href="/goals" label="Update Goals" />
                 </div>
-              </section>
+              </Panel>
             </aside>
           </section>
         </div>
       </div>
     </main>
-  );
-}
-
-function MetricCard({
-  title,
-  value,
-  subtitle,
-  tone = "info",
-}: {
-  title: string;
-  value: string;
-  subtitle: string;
-  tone?: "good" | "warning" | "danger" | "info";
-}) {
-  return (
-    <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-sm text-slate-400">{title}</p>
-
-          <p className="mt-2 break-words text-2xl font-semibold">{value}</p>
-
-          <p className="mt-1 text-xs text-slate-500">{subtitle}</p>
-        </div>
-
-        <span
-          className={`mt-1 h-3 w-3 shrink-0 rounded-full ${toneClass(tone)}`}
-        />
-      </div>
-    </div>
   );
 }
 
@@ -899,7 +867,7 @@ function InsightCard({
   severity: "good" | "warning" | "danger" | "info";
 }) {
   return (
-    <div className={`rounded-2xl border p-5 ${insightClass(severity)}`}>
+    <div className={`min-w-0 rounded-2xl border p-5 ${insightClass(severity)}`}>
       <p className="text-sm font-medium">{title}</p>
 
       <p className="mt-2 text-sm leading-6 opacity-85">{detail}</p>
@@ -921,23 +889,17 @@ function ReadinessRow({
   return (
     <Link
       href={href}
-      className="flex items-center justify-between gap-4 rounded-2xl border border-slate-800 bg-slate-950 p-4 hover:bg-slate-900"
+      className="flex min-w-0 items-center justify-between gap-4 rounded-2xl border border-slate-800 bg-slate-950 p-4 hover:bg-slate-900"
     >
-      <div>
+      <div className="min-w-0">
         <p className="text-sm font-medium text-slate-200">{label}</p>
 
         <p className="mt-1 text-xs text-slate-500">{value}</p>
       </div>
 
-      <span
-        className={
-          complete
-            ? "rounded-full bg-emerald-500/10 px-2 py-1 text-xs text-emerald-300"
-            : "rounded-full bg-amber-500/10 px-2 py-1 text-xs text-amber-300"
-        }
-      >
+      <StatusPill tone={complete ? "good" : "warning"}>
         {complete ? "Ready" : "Needs data"}
-      </span>
+      </StatusPill>
     </Link>
   );
 }
@@ -951,13 +913,6 @@ function QuickAction({ href, label }: { href: string; label: string }) {
       {label}
     </Link>
   );
-}
-
-function toneClass(tone: "good" | "warning" | "danger" | "info") {
-  if (tone === "good") return "bg-emerald-400";
-  if (tone === "warning") return "bg-amber-400";
-  if (tone === "danger") return "bg-red-400";
-  return "bg-blue-400";
 }
 
 function insightClass(severity: "good" | "warning" | "danger" | "info") {
