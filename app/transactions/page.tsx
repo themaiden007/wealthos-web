@@ -7,6 +7,7 @@ import AppNav from "@/components/AppNav";
 import { useToast } from "@/components/ToastProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
 import PlaidSyncButton from "@/components/PlaidSyncButton";
+
 type AccountType =
   | "checking"
   | "savings"
@@ -164,7 +165,12 @@ export default function TransactionsPage() {
   const [parsingFile, setParsingFile] = useState(false);
   const [updatingId, setUpdatingId] = useState("");
   const [deletingId, setDeletingId] = useState("");
+
   const [showImporter, setShowImporter] = useState(false);
+  const [showManualForm, setShowManualForm] = useState(false);
+  const [activeFilter, setActiveFilter] = useState<
+    "all" | "income" | "expense" | "transfer"
+  >("all");
 
   const [accountId, setAccountId] = useState("");
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
@@ -336,6 +342,90 @@ export default function TransactionsPage() {
     };
   }, [previewRows]);
 
+  const topCategories = useMemo(() => {
+    const monthExpenses = transactions.filter(
+      (transaction) =>
+        transaction.date.startsWith(currentMonth) &&
+        transaction.transaction_type === "expense"
+    );
+
+    const totals = new Map<string, number>();
+
+    monthExpenses.forEach((transaction) => {
+      const key = transaction.category || "Other";
+      totals.set(
+        key,
+        (totals.get(key) || 0) + Math.abs(Number(transaction.amount || 0))
+      );
+    });
+
+    return Array.from(totals.entries())
+      .map(([category, amount]) => ({ category, amount }))
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 6);
+  }, [transactions, currentMonth]);
+
+  const filteredTransactions = useMemo(() => {
+    if (activeFilter === "all") return transactions;
+
+    return transactions.filter(
+      (transaction) => transaction.transaction_type === activeFilter
+    );
+  }, [transactions, activeFilter]);
+
+  const groupedTransactions = useMemo(() => {
+    const groups = new Map<string, Transaction[]>();
+
+    filteredTransactions.forEach((transaction) => {
+      const key = transaction.date;
+      const current = groups.get(key) || [];
+      current.push(transaction);
+      groups.set(key, current);
+    });
+
+    return Array.from(groups.entries()).map(([date, rows]) => ({
+      date,
+      rows,
+      income: rows
+        .filter((row) => row.transaction_type === "income")
+        .reduce((sum, row) => sum + Math.abs(Number(row.amount || 0)), 0),
+      spending: rows
+        .filter((row) => row.transaction_type === "expense")
+        .reduce((sum, row) => sum + Math.abs(Number(row.amount || 0)), 0),
+    }));
+  }, [filteredTransactions]);
+
+  const cashFlowPercent = useMemo(() => {
+    if (monthlySummary.income <= 0) return 0;
+
+    return Math.max(
+      Math.min((monthlySummary.cashFlow / monthlySummary.income) * 100, 100),
+      -100
+    );
+  }, [monthlySummary]);
+
+  async function reloadTransactions() {
+    if (!userId) return;
+
+    const { data, error } = await supabase
+      .from("transactions")
+      .select("*")
+      .eq("user_id", userId)
+      .order("date", { ascending: false })
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      showToast({
+        type: "error",
+        title: "Failed to reload transactions",
+        message: error.message,
+      });
+      return;
+    }
+
+    setTransactions((data || []) as Transaction[]);
+  }
+
   async function addTransaction(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -418,6 +508,7 @@ export default function TransactionsPage() {
     setTransactionType("expense");
     setCategory("Other");
     setNotes("");
+    setShowManualForm(false);
 
     showToast({
       type: "success",
@@ -1028,27 +1119,6 @@ export default function TransactionsPage() {
   function getAccountName(id: string) {
     return accounts.find((account) => account.id === id)?.name || "Unknown";
   }
-  async function reloadTransactions() {
-  if (!userId) return;
-
-  const { data, error } = await supabase
-    .from("transactions")
-    .select("*")
-    .eq("user_id", userId)
-    .order("date", { ascending: false })
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    showToast({
-      type: "error",
-      title: "Failed to reload transactions",
-      message: error.message,
-    });
-    return;
-  }
-
-  setTransactions((data || []) as Transaction[]);
-}
 
   if (!hasLoaded) {
     return (
@@ -1070,61 +1140,144 @@ export default function TransactionsPage() {
 
       <div className="min-w-0 flex-1">
         <div className="mx-auto max-w-7xl px-4 py-6 pb-28 sm:px-6 lg:px-8 md:pb-8">
-         <div className="mb-8">
-  <p className="text-sm text-slate-400">WealthOS</p>
+          <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm text-slate-400">WealthOS</p>
+              <h1 className="mt-1 text-3xl font-semibold">Transactions</h1>
+              <p className="mt-1 text-sm text-slate-500">
+                Track spending, sync banks, import files, and review cash flow.
+              </p>
+            </div>
 
-  <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-    <div>
-      <h1 className="text-3xl font-semibold">Transactions</h1>
-      <p className="mt-1 text-sm text-slate-500">
-        Add, edit, import, sync, auto-categorize, and manage transactions.
-      </p>
-    </div>
+            <div className="flex flex-wrap gap-2">
+              <PlaidSyncButton
+                label="Sync Bank Data"
+                onComplete={reloadTransactions}
+              />
 
-    <PlaidSyncButton label = "Sync Bank Data" onComplete={reloadTransactions} />
-  </div>
-</div>
+              <button
+                type="button"
+                onClick={() => setShowImporter((current) => !current)}
+                className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-900"
+              >
+                Smart Import
+              </button>
 
-          <div className="grid gap-4 md:grid-cols-4">
-            <SummaryCard
-              title="Monthly Income"
-              value={formatCurrency(monthlySummary.income)}
-            />
-            <SummaryCard
-              title="Monthly Spending"
-              value={formatCurrency(monthlySummary.spending)}
-            />
-            <SummaryCard
-              title="Monthly Cash Flow"
-              value={formatCurrency(monthlySummary.cashFlow)}
-            />
-            <SummaryCard
-              title="Transfers"
-              value={formatCurrency(monthlySummary.transfers)}
-            />
+              <button
+                type="button"
+                onClick={() => setShowManualForm((current) => !current)}
+                className="rounded-xl bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-500"
+              >
+                + Add Transaction
+              </button>
+            </div>
           </div>
 
-          <div className="mt-8 grid gap-6 xl:grid-cols-[420px_1fr]">
-            <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <section className="overflow-hidden rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-sm">
+            <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                  Monthly Cash Flow
+                </p>
+
+                <p
+                  className={
+                    monthlySummary.cashFlow >= 0
+                      ? "mt-2 text-4xl font-semibold text-emerald-300"
+                      : "mt-2 text-4xl font-semibold text-red-300"
+                  }
+                >
+                  {formatCurrency(monthlySummary.cashFlow)}
+                </p>
+
+                <p className="mt-2 text-sm text-slate-500">
+                  {formatCurrency(monthlySummary.income)} income ·{" "}
+                  {formatCurrency(monthlySummary.spending)} spending ·{" "}
+                  {formatCurrency(monthlySummary.transfers)} transfers
+                </p>
+
+                <div className="mt-6">
+                  <div className="flex items-center justify-between text-xs text-slate-500">
+                    <span>Spending</span>
+                    <span>Income</span>
+                  </div>
+
+                  <div className="mt-2 h-4 overflow-hidden rounded-full bg-slate-800">
+                    <div
+                      className={
+                        monthlySummary.cashFlow >= 0
+                          ? "h-full rounded-full bg-emerald-500"
+                          : "h-full rounded-full bg-red-500"
+                      }
+                      style={{
+                        width: `${Math.max(
+                          Math.min(
+                            monthlySummary.income > 0
+                              ? (monthlySummary.spending /
+                                  monthlySummary.income) *
+                                  100
+                              : 0,
+                            100
+                          ),
+                          4
+                        )}%`,
+                      }}
+                    />
+                  </div>
+
+                  <p className="mt-2 text-xs text-slate-500">
+                    {cashFlowPercent >= 0
+                      ? `${Math.round(
+                          cashFlowPercent
+                        )}% of income remains after expenses.`
+                      : `Spending is ${Math.abs(
+                          Math.round(cashFlowPercent)
+                        )}% above income.`}
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+                <MetricTile
+                  title="Income"
+                  value={formatCurrency(monthlySummary.income)}
+                  tone="income"
+                />
+                <MetricTile
+                  title="Spending"
+                  value={formatCurrency(monthlySummary.spending)}
+                  tone="expense"
+                />
+                <MetricTile
+                  title="Transfers"
+                  value={formatCurrency(monthlySummary.transfers)}
+                  tone="neutral"
+                />
+              </div>
+            </div>
+          </section>
+
+          {showManualForm && (
+            <section className="mt-6 rounded-2xl border border-slate-800 bg-slate-900 p-5">
+              <div className="mb-5 flex items-start justify-between gap-3">
                 <div>
                   <h2 className="text-lg font-medium">Add Transaction</h2>
                   <p className="mt-1 text-sm text-slate-400">
-                    Add manually or use smart file import.
+                    Add a transaction manually when it is not synced or imported.
                   </p>
                 </div>
 
                 <button
                   type="button"
-                  onClick={() => setShowImporter((current) => !current)}
-                  className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800"
+                  onClick={() => setShowManualForm(false)}
+                  className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-400 hover:bg-slate-800"
                 >
-                  {showImporter ? "Hide Importer" : "Smart Import"}
+                  Close
                 </button>
               </div>
 
               {accounts.length === 0 ? (
-                <div className="mt-5 rounded-xl border border-amber-800 bg-amber-950/30 p-4 text-sm text-amber-200">
+                <div className="rounded-xl border border-amber-800 bg-amber-950/30 p-4 text-sm text-amber-200">
                   You need to add at least one active account first.
                   <div className="mt-3">
                     <Link
@@ -1136,200 +1289,519 @@ export default function TransactionsPage() {
                   </div>
                 </div>
               ) : (
-                <div className="mt-5 space-y-6">
-                  <form onSubmit={addTransaction} className="space-y-4">
-                    <AccountSelect
-                      accounts={accounts}
-                      accountId={accountId}
-                      setAccountId={setAccountId}
+                <form
+                  onSubmit={addTransaction}
+                  className="grid gap-4 lg:grid-cols-[1fr_1fr_1fr_1fr] xl:grid-cols-[1fr_1fr_1fr_1fr_auto]"
+                >
+                  <AccountSelect
+                    accounts={accounts}
+                    accountId={accountId}
+                    setAccountId={setAccountId}
+                  />
+
+                  <div>
+                    <label className="text-sm text-slate-300">Date</label>
+                    <input
+                      value={date}
+                      onChange={(event) => setDate(event.target.value)}
+                      type="date"
+                      className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
                     />
+                  </div>
 
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <div>
-                        <label className="text-sm text-slate-300">Date</label>
-                        <input
-                          value={date}
-                          onChange={(event) => setDate(event.target.value)}
-                          type="date"
-                          className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
-                        />
-                      </div>
+                  <div>
+                    <label className="text-sm text-slate-300">Name</label>
+                    <input
+                      value={name}
+                      onChange={(event) => setName(event.target.value)}
+                      placeholder="Walmart, Salary, Rent"
+                      className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                    />
+                  </div>
 
-                      <div>
-                        <label className="text-sm text-slate-300">Amount</label>
-                        <input
-                          value={amount}
-                          onChange={(event) => setAmount(event.target.value)}
-                          placeholder="Example: 45.99"
-                          type="number"
-                          step="0.01"
-                          className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
-                        />
-                      </div>
-                    </div>
+                  <div>
+                    <label className="text-sm text-slate-300">Amount</label>
+                    <input
+                      value={amount}
+                      onChange={(event) => setAmount(event.target.value)}
+                      placeholder="45.99"
+                      type="number"
+                      step="0.01"
+                      className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                    />
+                  </div>
 
-                    <div>
-                      <label className="text-sm text-slate-300">
-                        Transaction Name
-                      </label>
-                      <input
-                        value={name}
-                        onChange={(event) => setName(event.target.value)}
-                        placeholder="Example: Walmart, Salary, Rent"
-                        className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-sm text-slate-300">Merchant</label>
-                      <input
-                        value={merchantName}
-                        onChange={(event) =>
-                          setMerchantName(event.target.value)
-                        }
-                        placeholder="Optional"
-                        className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
-                      />
-                    </div>
-
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <TransactionTypeSelect
-                        transactionType={transactionType}
-                        setTransactionType={setTransactionType}
-                      />
-
-                      <CategorySelect
-                        category={category}
-                        setCategory={setCategory}
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-sm text-slate-300">Notes</label>
-                      <textarea
-                        value={notes}
-                        onChange={(event) => setNotes(event.target.value)}
-                        placeholder="Optional notes"
-                        rows={3}
-                        className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
-                      />
-                    </div>
-
+                  <div className="flex items-end">
                     <button
                       type="submit"
                       disabled={saving}
                       className="w-full rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium hover:bg-blue-500 disabled:opacity-60"
                     >
-                      {saving ? "Saving..." : "Add Transaction"}
+                      {saving ? "Saving..." : "Save"}
                     </button>
-                  </form>
+                  </div>
 
-                  {showImporter && (
-                    <SmartImporterPanel
-                      accounts={accounts}
-                      accountId={accountId}
-                      setAccountId={setAccountId}
-                      sourceName={sourceName}
-                      setSourceName={setSourceName}
-                      parsingFile={parsingFile}
-                      importing={importing}
-                      handleImportFile={handleImportFile}
-                      csvText={csvText}
-                      setCsvText={setCsvText}
-                      parsePastedCsvPreview={parsePastedCsvPreview}
-                      importMessage={importMessage}
-                      importColumns={importColumns}
-                      importMapping={importMapping}
-                      updateMapping={updateMapping}
-                      previewRows={previewRows}
-                      importStats={importStats}
-                      togglePreviewRow={togglePreviewRow}
-                      selectAllNewRows={selectAllNewRows}
-                      clearPreviewSelection={clearPreviewSelection}
-                      importSelectedPreviewRows={importSelectedPreviewRows}
-                      saveMapping={saveMapping}
-                      setSaveMapping={setSaveMapping}
-                      importFileName={importFileName}
-                      importFileType={importFileType}
-                      categoryRules={categoryRules}
-                      newRuleMatch={newRuleMatch}
-                      setNewRuleMatch={setNewRuleMatch}
-                      newRuleCategory={newRuleCategory}
-                      setNewRuleCategory={setNewRuleCategory}
-                      newRuleType={newRuleType}
-                      setNewRuleType={setNewRuleType}
-                      savingRule={savingRule}
-                      createCategoryRule={createCategoryRule}
-                      deleteCategoryRule={deleteCategoryRule}
+                  <div>
+                    <label className="text-sm text-slate-300">Merchant</label>
+                    <input
+                      value={merchantName}
+                      onChange={(event) => setMerchantName(event.target.value)}
+                      placeholder="Optional"
+                      className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
                     />
-                  )}
-                </div>
+                  </div>
+
+                  <TransactionTypeSelect
+                    transactionType={transactionType}
+                    setTransactionType={setTransactionType}
+                  />
+
+                  <CategorySelect
+                    category={category}
+                    setCategory={setCategory}
+                  />
+
+                  <div className="lg:col-span-2">
+                    <label className="text-sm text-slate-300">Notes</label>
+                    <input
+                      value={notes}
+                      onChange={(event) => setNotes(event.target.value)}
+                      placeholder="Optional notes"
+                      className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                    />
+                  </div>
+                </form>
               )}
             </section>
+          )}
 
+          {showImporter && (
+            <section className="mt-6 rounded-2xl border border-slate-800 bg-slate-900 p-5">
+              <SmartImporterPanel
+                accounts={accounts}
+                accountId={accountId}
+                setAccountId={setAccountId}
+                sourceName={sourceName}
+                setSourceName={setSourceName}
+                parsingFile={parsingFile}
+                importing={importing}
+                handleImportFile={handleImportFile}
+                csvText={csvText}
+                setCsvText={setCsvText}
+                parsePastedCsvPreview={parsePastedCsvPreview}
+                importMessage={importMessage}
+                importColumns={importColumns}
+                importMapping={importMapping}
+                updateMapping={updateMapping}
+                previewRows={previewRows}
+                importStats={importStats}
+                togglePreviewRow={togglePreviewRow}
+                selectAllNewRows={selectAllNewRows}
+                clearPreviewSelection={clearPreviewSelection}
+                importSelectedPreviewRows={importSelectedPreviewRows}
+                saveMapping={saveMapping}
+                setSaveMapping={setSaveMapping}
+                importFileName={importFileName}
+                importFileType={importFileType}
+                categoryRules={categoryRules}
+                newRuleMatch={newRuleMatch}
+                setNewRuleMatch={setNewRuleMatch}
+                newRuleCategory={newRuleCategory}
+                setNewRuleCategory={setNewRuleCategory}
+                newRuleType={newRuleType}
+                setNewRuleType={setNewRuleType}
+                savingRule={savingRule}
+                createCategoryRule={createCategoryRule}
+                deleteCategoryRule={deleteCategoryRule}
+              />
+            </section>
+          )}
+
+          <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
             <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-              <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+              <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                 <div>
-                  <h2 className="text-lg font-medium">Transaction List</h2>
+                  <h2 className="text-lg font-medium">Transaction Feed</h2>
                   <p className="text-sm text-slate-400">
-                    {transactions.length} transaction
-                    {transactions.length === 1 ? "" : "s"} added
+                    {filteredTransactions.length} transaction
+                    {filteredTransactions.length === 1 ? "" : "s"} shown
                   </p>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  {(["all", "income", "expense", "transfer"] as const).map(
+                    (filter) => (
+                      <button
+                        key={filter}
+                        type="button"
+                        onClick={() => setActiveFilter(filter)}
+                        className={
+                          activeFilter === filter
+                            ? "rounded-xl bg-blue-600 px-3 py-2 text-xs font-medium capitalize text-white"
+                            : "rounded-xl border border-slate-700 px-3 py-2 text-xs capitalize text-slate-400 hover:bg-slate-800"
+                        }
+                      >
+                        {filter}
+                      </button>
+                    )
+                  )}
                 </div>
               </div>
 
-              {transactions.length === 0 ? (
+              {groupedTransactions.length === 0 ? (
                 <div className="rounded-2xl border border-slate-800 bg-slate-950 p-8 text-center text-slate-500">
-                  No transactions yet. Add one manually or import a file.
+                  No transactions yet. Sync Plaid, import a file, or add one
+                  manually.
                 </div>
               ) : (
-                <div className="grid gap-4 xl:grid-cols-2">
-                  {transactions.map((transaction) => {
-                    const isEditing = editingId === transaction.id;
-                    const isBusy =
-                      updatingId === transaction.id ||
-                      deletingId === transaction.id;
+                <div className="space-y-5">
+                  {groupedTransactions.map((group) => (
+                    <div key={group.date}>
+                      <div className="mb-3 flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-slate-200">
+                            {formatDateLabel(group.date)}
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            {group.rows.length} transaction
+                            {group.rows.length === 1 ? "" : "s"}
+                          </p>
+                        </div>
 
-                    return (
-                      <TransactionCard
-                        key={transaction.id}
-                        transaction={transaction}
-                        accounts={accounts}
-                        isEditing={isEditing}
-                        isBusy={isBusy}
-                        updatingId={updatingId}
-                        deletingId={deletingId}
-                        editAccountId={editAccountId}
-                        setEditAccountId={setEditAccountId}
-                        editDate={editDate}
-                        setEditDate={setEditDate}
-                        editName={editName}
-                        setEditName={setEditName}
-                        editMerchantName={editMerchantName}
-                        setEditMerchantName={setEditMerchantName}
-                        editAmount={editAmount}
-                        setEditAmount={setEditAmount}
-                        editTransactionType={editTransactionType}
-                        setEditTransactionType={setEditTransactionType}
-                        editCategory={editCategory}
-                        setEditCategory={setEditCategory}
-                        editNotes={editNotes}
-                        setEditNotes={setEditNotes}
-                        startEditing={startEditing}
-                        cancelEditing={cancelEditing}
-                        saveTransactionEdit={saveTransactionEdit}
-                        deleteTransaction={deleteTransaction}
-                        getAccountName={getAccountName}
-                      />
-                    );
-                  })}
+                        <div className="text-right text-xs text-slate-500">
+                          {group.income > 0 && (
+                            <p className="text-emerald-300">
+                              +{formatCurrency(group.income)}
+                            </p>
+                          )}
+                          {group.spending > 0 && (
+                            <p className="text-red-300">
+                              -{formatCurrency(group.spending)}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="divide-y divide-slate-800 overflow-hidden rounded-2xl border border-slate-800 bg-slate-950">
+                        {group.rows.map((transaction) => {
+                          const isEditing = editingId === transaction.id;
+                          const isBusy =
+                            updatingId === transaction.id ||
+                            deletingId === transaction.id;
+
+                          return (
+                            <TransactionFeedRow
+                              key={transaction.id}
+                              transaction={transaction}
+                              accounts={accounts}
+                              isEditing={isEditing}
+                              isBusy={isBusy}
+                              updatingId={updatingId}
+                              deletingId={deletingId}
+                              editAccountId={editAccountId}
+                              setEditAccountId={setEditAccountId}
+                              editDate={editDate}
+                              setEditDate={setEditDate}
+                              editName={editName}
+                              setEditName={setEditName}
+                              editMerchantName={editMerchantName}
+                              setEditMerchantName={setEditMerchantName}
+                              editAmount={editAmount}
+                              setEditAmount={setEditAmount}
+                              editTransactionType={editTransactionType}
+                              setEditTransactionType={setEditTransactionType}
+                              editCategory={editCategory}
+                              setEditCategory={setEditCategory}
+                              editNotes={editNotes}
+                              setEditNotes={setEditNotes}
+                              startEditing={startEditing}
+                              cancelEditing={cancelEditing}
+                              saveTransactionEdit={saveTransactionEdit}
+                              deleteTransaction={deleteTransaction}
+                              getAccountName={getAccountName}
+                            />
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </section>
+
+            <aside className="space-y-6">
+              <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+                <h2 className="text-lg font-medium">Top Categories</h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Spending this month
+                </p>
+
+                <div className="mt-5 space-y-4">
+                  {topCategories.length === 0 ? (
+                    <p className="text-sm text-slate-500">
+                      No monthly spending yet.
+                    </p>
+                  ) : (
+                    topCategories.map((row) => {
+                      const width =
+                        monthlySummary.spending > 0
+                          ? (row.amount / monthlySummary.spending) * 100
+                          : 0;
+
+                      return (
+                        <div key={row.category}>
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="truncate text-sm text-slate-300">
+                              {row.category}
+                            </p>
+                            <p className="shrink-0 text-sm font-medium text-slate-100">
+                              {formatCurrency(row.amount)}
+                            </p>
+                          </div>
+
+                          <div className="mt-2 h-2 rounded-full bg-slate-800">
+                            <div
+                              className="h-2 rounded-full bg-cyan-400"
+                              style={{ width: `${Math.max(width, 4)}%` }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </section>
+
+              <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+                <h2 className="text-lg font-medium">Automation Health</h2>
+
+                <div className="mt-5 space-y-4">
+                  <SideMetric
+                    label="Smart import preview"
+                    value={
+                      previewRows.length > 0
+                        ? `${importStats.ready} ready`
+                        : "No active preview"
+                    }
+                  />
+                  <SideMetric
+                    label="Duplicate rows flagged"
+                    value={String(importStats.duplicates)}
+                  />
+                  <SideMetric
+                    label="Auto rules"
+                    value={String(categoryRules.length)}
+                  />
+                  <SideMetric
+                    label="Synced transactions"
+                    value={String(
+                      transactions.filter(
+                        (transaction) => transaction.source === "plaid"
+                      ).length
+                    )}
+                  />
+                </div>
+              </section>
+            </aside>
           </div>
         </div>
       </div>
     </main>
+  );
+}
+
+function MetricTile({
+  title,
+  value,
+  tone,
+}: {
+  title: string;
+  value: string;
+  tone: "income" | "expense" | "neutral";
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+      <p className="text-sm text-slate-500">{title}</p>
+      <p
+        className={
+          tone === "income"
+            ? "mt-2 text-2xl font-semibold text-emerald-300"
+            : tone === "expense"
+            ? "mt-2 text-2xl font-semibold text-red-300"
+            : "mt-2 text-2xl font-semibold text-slate-200"
+        }
+      >
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function SideMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+      <span className="text-sm text-slate-400">{label}</span>
+      <span className="text-sm font-medium text-slate-100">{value}</span>
+    </div>
+  );
+}
+
+function TransactionFeedRow({
+  transaction,
+  accounts,
+  isEditing,
+  isBusy,
+  updatingId,
+  deletingId,
+  editAccountId,
+  setEditAccountId,
+  editDate,
+  setEditDate,
+  editName,
+  setEditName,
+  editMerchantName,
+  setEditMerchantName,
+  editAmount,
+  setEditAmount,
+  editTransactionType,
+  setEditTransactionType,
+  editCategory,
+  setEditCategory,
+  editNotes,
+  setEditNotes,
+  startEditing,
+  cancelEditing,
+  saveTransactionEdit,
+  deleteTransaction,
+  getAccountName,
+}: {
+  transaction: Transaction;
+  accounts: Account[];
+  isEditing: boolean;
+  isBusy: boolean;
+  updatingId: string;
+  deletingId: string;
+  editAccountId: string;
+  setEditAccountId: (value: string) => void;
+  editDate: string;
+  setEditDate: (value: string) => void;
+  editName: string;
+  setEditName: (value: string) => void;
+  editMerchantName: string;
+  setEditMerchantName: (value: string) => void;
+  editAmount: string;
+  setEditAmount: (value: string) => void;
+  editTransactionType: TransactionType;
+  setEditTransactionType: (value: TransactionType) => void;
+  editCategory: string;
+  setEditCategory: (value: string) => void;
+  editNotes: string;
+  setEditNotes: (value: string) => void;
+  startEditing: (transaction: Transaction) => void;
+  cancelEditing: () => void;
+  saveTransactionEdit: (transactionId: string) => void;
+  deleteTransaction: (transaction: Transaction) => void;
+  getAccountName: (id: string) => string;
+}) {
+  if (isEditing) {
+    return (
+      <div className="p-4">
+        <TransactionCard
+          transaction={transaction}
+          accounts={accounts}
+          isEditing={isEditing}
+          isBusy={isBusy}
+          updatingId={updatingId}
+          deletingId={deletingId}
+          editAccountId={editAccountId}
+          setEditAccountId={setEditAccountId}
+          editDate={editDate}
+          setEditDate={setEditDate}
+          editName={editName}
+          setEditName={setEditName}
+          editMerchantName={editMerchantName}
+          setEditMerchantName={setEditMerchantName}
+          editAmount={editAmount}
+          setEditAmount={setEditAmount}
+          editTransactionType={editTransactionType}
+          setEditTransactionType={setEditTransactionType}
+          editCategory={editCategory}
+          setEditCategory={setEditCategory}
+          editNotes={editNotes}
+          setEditNotes={setEditNotes}
+          startEditing={startEditing}
+          cancelEditing={cancelEditing}
+          saveTransactionEdit={saveTransactionEdit}
+          deleteTransaction={deleteTransaction}
+          getAccountName={getAccountName}
+        />
+      </div>
+    );
+  }
+
+  const isIncome = transaction.transaction_type === "income";
+  const isExpense = transaction.transaction_type === "expense";
+
+  return (
+    <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="truncate font-medium text-slate-100">
+            {transaction.name}
+          </p>
+
+          <span className="rounded-full bg-slate-800 px-2 py-1 text-[11px] capitalize text-slate-400">
+            {transaction.category || "Other"}
+          </span>
+
+          {transaction.source === "plaid" && (
+            <span className="rounded-full bg-emerald-500/10 px-2 py-1 text-[11px] text-emerald-300">
+              Plaid
+            </span>
+          )}
+        </div>
+
+        <p className="mt-1 truncate text-xs text-slate-500">
+          {getAccountName(transaction.account_id)} ·{" "}
+          {transaction.merchant_name || transaction.transaction_type}
+        </p>
+      </div>
+
+      <div className="flex shrink-0 items-center gap-3">
+        <p
+          className={
+            isIncome
+              ? "text-right text-lg font-semibold text-emerald-300"
+              : isExpense
+              ? "text-right text-lg font-semibold text-red-300"
+              : "text-right text-lg font-semibold text-slate-300"
+          }
+        >
+          {isIncome ? "+" : isExpense ? "-" : ""}
+          {formatCurrency(Number(transaction.amount))}
+        </p>
+
+        <div className="flex gap-1">
+          <button
+            type="button"
+            onClick={() => startEditing(transaction)}
+            disabled={isBusy}
+            className="rounded-lg border border-slate-700 px-2 py-1 text-xs text-slate-400 hover:bg-slate-800 disabled:opacity-60"
+          >
+            Edit
+          </button>
+
+          <button
+            type="button"
+            onClick={() => deleteTransaction(transaction)}
+            disabled={isBusy}
+            className="rounded-lg border border-slate-700 px-2 py-1 text-xs text-slate-400 hover:border-red-900 hover:bg-red-950 hover:text-red-300 disabled:opacity-60"
+          >
+            {deletingId === transaction.id ? "..." : "Delete"}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -2230,7 +2702,9 @@ async function parsePdfRows(file: File) {
     if (!cleaned) return;
 
     const dateMatch = cleaned.match(/\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b/);
-    const amountMatches = cleaned.match(/-?\$?\d{1,3}(?:,\d{3})*(?:\.\d{2})|-?\$?\d+\.\d{2}/g);
+    const amountMatches = cleaned.match(
+      /-?\$?\d{1,3}(?:,\d{3})*(?:\.\d{2})|-?\$?\d+\.\d{2}/g
+    );
 
     if (!dateMatch || !amountMatches || amountMatches.length === 0) return;
 
@@ -2299,7 +2773,9 @@ function buildPreviewRows({
     const parsedName = String(nameRaw || merchantRaw || "Imported Transaction")
       .trim()
       .slice(0, 160);
-    const parsedMerchant = String(merchantRaw || parsedName).trim().slice(0, 160);
+    const parsedMerchant = String(merchantRaw || parsedName)
+      .trim()
+      .slice(0, 160);
 
     const ruleResult = applyCategoryRules({
       name: parsedName,
@@ -2498,8 +2974,18 @@ function inferMapping(columns: string[]): ImportMapping {
     ]),
     merchantColumn: findColumn(columns, ["merchant", "vendor", "payee"]),
     amountColumn: findColumn(columns, ["amount", "transaction amount", "value"]),
-    debitColumn: findColumn(columns, ["debit", "withdrawal", "spent", "outflow"]),
-    creditColumn: findColumn(columns, ["credit", "deposit", "received", "inflow"]),
+    debitColumn: findColumn(columns, [
+      "debit",
+      "withdrawal",
+      "spent",
+      "outflow",
+    ]),
+    creditColumn: findColumn(columns, [
+      "credit",
+      "deposit",
+      "received",
+      "inflow",
+    ]),
     categoryColumn: findColumn(columns, ["category", "type category"]),
     typeColumn: findColumn(columns, ["type", "transaction type"]),
     notesColumn: findColumn(columns, ["notes", "note", "memo"]),
@@ -2630,13 +3116,17 @@ function normalizeDate(value: string) {
   return "";
 }
 
-function SummaryCard({ title, value }: { title: string; value: string }) {
-  return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-      <p className="text-sm text-slate-400">{title}</p>
-      <p className="mt-2 break-words text-2xl font-semibold">{value}</p>
-    </div>
-  );
+function formatDateLabel(value: string) {
+  const parsed = new Date(`${value}T00:00:00`);
+
+  if (Number.isNaN(parsed.getTime())) return value;
+
+  return new Intl.DateTimeFormat("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(parsed);
 }
 
 function formatCurrency(value: number) {
