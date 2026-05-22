@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import AppNav from "@/components/AppNav";
 import { useToast } from "@/components/ToastProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
+import PlaidConnectButton from "@/components/PlaidConnectButton";
 
 type AccountType =
   | "checking"
@@ -85,6 +86,26 @@ export default function AccountsPage() {
     useState<AccountType>("checking");
   const [editBalance, setEditBalance] = useState("");
 
+  async function loadAccountsForUser(nextUserId: string) {
+    const { data, error } = await supabase
+      .from("accounts")
+      .select("*")
+      .eq("user_id", nextUserId)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("Failed to load accounts:", error);
+      showToast({
+        type: "error",
+        title: "Failed to load accounts",
+        message: error.message,
+      });
+      return;
+    }
+
+    setAccounts((data || []) as Account[]);
+  }
+
   useEffect(() => {
     async function initialize() {
       const {
@@ -99,28 +120,14 @@ export default function AccountsPage() {
       setUserId(user.id);
       setUserEmail(user.email || "");
 
-      const { data, error } = await supabase
-        .from("accounts")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false });
-
-      if (error) {
-        console.error("Failed to load accounts:", error);
-        showToast({
-          type: "error",
-          title: "Failed to load accounts",
-          message: error.message,
-        });
-      } else {
-        setAccounts((data || []) as Account[]);
-      }
+      await loadAccountsForUser(user.id);
 
       setHasLoaded(true);
     }
 
     initialize();
-  }, [showToast]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const totals = useMemo(() => {
     const activeAccounts = accounts.filter((account) => account.is_active);
@@ -378,7 +385,7 @@ export default function AccountsPage() {
         <AppNav userEmail={userEmail} />
 
         <div className="min-w-0 flex-1">
-          <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-7xl px-4 py-6 pb-28 sm:px-6 lg:px-8 md:pb-6">
             Loading accounts...
           </div>
         </div>
@@ -391,13 +398,26 @@ export default function AccountsPage() {
       <AppNav userEmail={userEmail} />
 
       <div className="min-w-0 flex-1">
-        <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-7xl px-4 py-6 pb-28 sm:px-6 lg:px-8 md:pb-8">
           <div className="mb-8">
             <p className="text-sm text-slate-400">WealthOS</p>
-            <h1 className="mt-2 text-3xl font-semibold">Accounts</h1>
-            <p className="mt-1 text-sm text-slate-500">
-              Add, edit, archive, and manage your financial accounts.
-            </p>
+            <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <h1 className="text-3xl font-semibold">Accounts</h1>
+                <p className="mt-1 text-sm text-slate-500">
+                  Connect banks, add manual accounts, edit balances, and manage
+                  your financial accounts.
+                </p>
+              </div>
+
+              <PlaidConnectButton
+                onComplete={() => {
+                  if (userId) {
+                    loadAccountsForUser(userId);
+                  }
+                }}
+              />
+            </div>
           </div>
 
           <div className="grid gap-4 md:grid-cols-3">
@@ -414,11 +434,41 @@ export default function AccountsPage() {
 
           <div className="mt-8 grid gap-6 xl:grid-cols-[420px_1fr]">
             <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-              <h2 className="text-lg font-medium">Add Manual Account</h2>
-              <p className="mt-1 text-sm text-slate-400">
-                Add checking, savings, credit cards, loans, investments, and
-                assets.
-              </p>
+              <div className="rounded-2xl border border-emerald-900 bg-emerald-950/20 p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <h2 className="text-lg font-medium text-emerald-100">
+                      Connect Bank Automatically
+                    </h2>
+                    <p className="mt-1 text-sm leading-6 text-emerald-100/70">
+                      Use Plaid Sandbox to connect accounts and sync
+                      transactions automatically. Manual accounts still work
+                      below.
+                    </p>
+                  </div>
+
+                  <PlaidConnectButton
+                    onComplete={() => {
+                      if (userId) {
+                        loadAccountsForUser(userId);
+                      }
+                    }}
+                  />
+                </div>
+
+                <p className="mt-3 text-xs leading-5 text-emerald-100/50">
+                  Sandbox test bank: First Platypus Bank. Username: user_good.
+                  Password: pass_good.
+                </p>
+              </div>
+
+              <div className="mt-6">
+                <h2 className="text-lg font-medium">Add Manual Account</h2>
+                <p className="mt-1 text-sm text-slate-400">
+                  Add checking, savings, credit cards, loans, investments, and
+                  assets.
+                </p>
+              </div>
 
               <form onSubmit={addAccount} noValidate className="mt-5 space-y-4">
                 <div>
@@ -499,7 +549,8 @@ export default function AccountsPage() {
 
               {accounts.length === 0 ? (
                 <div className="rounded-2xl border border-slate-800 bg-slate-950 p-8 text-center text-slate-500">
-                  No accounts yet. Add your first manual account.
+                  No accounts yet. Connect a bank or add your first manual
+                  account.
                 </div>
               ) : (
                 <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-3">
@@ -639,6 +690,17 @@ export default function AccountsPage() {
                               <span className="rounded-full bg-slate-800 px-2 py-1 text-xs text-slate-400">
                                 {account.currency || "USD"}
                               </span>
+                              <span
+                                className={
+                                  account.source === "plaid"
+                                    ? "rounded-full bg-emerald-500/10 px-2 py-1 text-xs text-emerald-300"
+                                    : "rounded-full bg-slate-800 px-2 py-1 text-xs text-slate-400"
+                                }
+                              >
+                                {account.source === "plaid"
+                                  ? "Plaid"
+                                  : "Manual"}
+                              </span>
                             </div>
 
                             <div className="mt-5 grid grid-cols-3 gap-2">
@@ -692,7 +754,7 @@ function SummaryCard({ title, value }: { title: string; value: string }) {
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
       <p className="text-sm text-slate-400">{title}</p>
-      <p className="mt-2 text-2xl font-semibold">{value}</p>
+      <p className="mt-2 break-words text-2xl font-semibold">{value}</p>
     </div>
   );
 }
