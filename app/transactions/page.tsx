@@ -1081,7 +1081,7 @@ export default function TransactionsPage() {
       </p>
     </div>
 
-    <PlaidSyncButton onComplete={reloadTransactions} />
+    <PlaidSyncButton label = "Sync Bank Data" onComplete={reloadTransactions} />
   </div>
 </div>
 
