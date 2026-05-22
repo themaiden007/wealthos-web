@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabase";
 import AppNav from "@/components/AppNav";
 import { useToast } from "@/components/ToastProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
-
+import PlaidSyncButton from "@/components/PlaidSyncButton";
 type AccountType =
   | "checking"
   | "savings"
@@ -1028,6 +1028,27 @@ export default function TransactionsPage() {
   function getAccountName(id: string) {
     return accounts.find((account) => account.id === id)?.name || "Unknown";
   }
+  async function reloadTransactions() {
+  if (!userId) return;
+
+  const { data, error } = await supabase
+    .from("transactions")
+    .select("*")
+    .eq("user_id", userId)
+    .order("date", { ascending: false })
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    showToast({
+      type: "error",
+      title: "Failed to reload transactions",
+      message: error.message,
+    });
+    return;
+  }
+
+  setTransactions((data || []) as Transaction[]);
+}
 
   if (!hasLoaded) {
     return (
@@ -1049,13 +1070,20 @@ export default function TransactionsPage() {
 
       <div className="min-w-0 flex-1">
         <div className="mx-auto max-w-7xl px-4 py-6 pb-28 sm:px-6 lg:px-8 md:pb-8">
-          <div className="mb-8">
-            <p className="text-sm text-slate-400">WealthOS</p>
-            <h1 className="mt-2 text-3xl font-semibold">Transactions</h1>
-            <p className="mt-1 text-sm text-slate-500">
-              Add, edit, import, auto-categorize, and manage transactions.
-            </p>
-          </div>
+         <div className="mb-8">
+  <p className="text-sm text-slate-400">WealthOS</p>
+
+  <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+    <div>
+      <h1 className="text-3xl font-semibold">Transactions</h1>
+      <p className="mt-1 text-sm text-slate-500">
+        Add, edit, import, sync, auto-categorize, and manage transactions.
+      </p>
+    </div>
+
+    <PlaidSyncButton onComplete={reloadTransactions} />
+  </div>
+</div>
 
           <div className="grid gap-4 md:grid-cols-4">
             <SummaryCard

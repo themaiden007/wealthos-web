@@ -6,7 +6,7 @@ import AppNav from "@/components/AppNav";
 import { useToast } from "@/components/ToastProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
 import PlaidConnectButton from "@/components/PlaidConnectButton";
-
+import PlaidSyncButton from "@/components/PlaidSyncButton";
 type AccountType =
   | "checking"
   | "savings"
@@ -410,13 +410,23 @@ export default function AccountsPage() {
                 </p>
               </div>
 
-              <PlaidConnectButton
-                onComplete={() => {
-                  if (userId) {
-                    loadAccountsForUser(userId);
-                  }
-                }}
-              />
+  <div className="flex flex-wrap gap-2">
+  <PlaidConnectButton
+    onComplete={() => {
+      if (userId) {
+        loadAccountsForUser(userId);
+      }
+    }}
+  />
+
+  <PlaidSyncButton
+    onComplete={() => {
+      if (userId) {
+        loadAccountsForUser(userId);
+      }
+    }}
+  />
+</div>
             </div>
           </div>
 
