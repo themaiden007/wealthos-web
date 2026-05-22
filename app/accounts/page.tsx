@@ -16,6 +16,10 @@ import { useConfirm } from "@/components/ConfirmProvider";
 import PlaidConnectButton from "@/components/PlaidConnectButton";
 import PlaidSyncButton from "@/components/PlaidSyncButton";
 import PlaidConnectionsPanel from "@/components/PlaidConnectionsPanel";
+import PageHeader from "@/components/ui/PageHeader";
+import Panel from "@/components/ui/Panel";
+import ActionButton from "@/components/ui/ActionButton";
+import StatusPill from "@/components/ui/StatusPill";
 
 type AccountType =
   | "checking"
@@ -89,41 +93,13 @@ const ACCOUNT_GROUPS: Array<{
   types: AccountType[];
   tone: "asset" | "liability";
 }> = [
-  {
-    title: "Cash",
-    types: ["checking", "savings", "cash"],
-    tone: "asset",
-  },
-  {
-    title: "Investments",
-    types: ["investment"],
-    tone: "asset",
-  },
-  {
-    title: "Real Estate",
-    types: ["real_estate"],
-    tone: "asset",
-  },
-  {
-    title: "Vehicles",
-    types: ["vehicle"],
-    tone: "asset",
-  },
-  {
-    title: "Other Assets",
-    types: ["other_asset"],
-    tone: "asset",
-  },
-  {
-    title: "Credit Cards",
-    types: ["credit_card"],
-    tone: "liability",
-  },
-  {
-    title: "Loans",
-    types: ["loan"],
-    tone: "liability",
-  },
+  { title: "Cash", types: ["checking", "savings", "cash"], tone: "asset" },
+  { title: "Investments", types: ["investment"], tone: "asset" },
+  { title: "Real Estate", types: ["real_estate"], tone: "asset" },
+  { title: "Vehicles", types: ["vehicle"], tone: "asset" },
+  { title: "Other Assets", types: ["other_asset"], tone: "asset" },
+  { title: "Credit Cards", types: ["credit_card"], tone: "liability" },
+  { title: "Loans", types: ["loan"], tone: "liability" },
   {
     title: "Other Liabilities",
     types: ["other_liability"],
@@ -591,7 +567,7 @@ export default function AccountsPage() {
         <AppNav userEmail={userEmail} />
 
         <div className="min-w-0 flex-1">
-          <div className="mx-auto max-w-7xl px-4 py-6 pb-28 sm:px-6 lg:px-8 md:pb-6">
+          <div className="mx-auto w-full max-w-7xl overflow-x-hidden px-4 py-6 pb-28 sm:px-6 lg:px-8 md:pb-6">
             Loading accounts...
           </div>
         </div>
@@ -604,44 +580,43 @@ export default function AccountsPage() {
       <AppNav userEmail={userEmail} />
 
       <div className="min-w-0 flex-1">
-        <div className="mx-auto max-w-7xl px-4 py-6 pb-28 sm:px-6 lg:px-8 md:pb-8">
-          <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-sm text-slate-400">WealthOS</p>
-              <h1 className="mt-1 text-3xl font-semibold">Accounts</h1>
-            </div>
+        <div className="mx-auto w-full max-w-7xl overflow-x-hidden px-4 py-6 pb-28 sm:px-6 lg:px-8 md:pb-8">
+          <PageHeader
+            title="Accounts"
+            description="Connect banks, manage manual accounts, and track net worth."
+            actions={
+              <>
+                <ActionButton
+                  onClick={() =>
+                    setShowConnectedBanks((current) => !current)
+                  }
+                >
+                  Connected Banks
+                </ActionButton>
 
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => setShowConnectedBanks((current) => !current)}
-                className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-900"
-              >
-                Connected Banks
-              </button>
+                <PlaidSyncButton
+                  label="Refresh all"
+                  onComplete={async () => {
+                    await refreshAccountsAndSnapshots("plaid_sync");
+                  }}
+                />
 
-              <PlaidSyncButton
-                label="Refresh all"
-                onComplete={async () => {
-                  await refreshAccountsAndSnapshots("plaid_sync");
-                }}
-              />
+                <PlaidConnectButton
+                  onComplete={async () => {
+                    await refreshAccountsAndSnapshots("plaid_connect");
+                  }}
+                />
 
-              <PlaidConnectButton
-                onComplete={async () => {
-                  await refreshAccountsAndSnapshots("plaid_connect");
-                }}
-              />
-
-              <button
-                type="button"
-                onClick={() => setShowManualForm((current) => !current)}
-                className="rounded-xl bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-500"
-              >
-                + Add account
-              </button>
-            </div>
-          </div>
+                <ActionButton
+                  variant="primary"
+                  onClick={() => setShowManualForm((current) => !current)}
+                  className="bg-orange-600 hover:bg-orange-500"
+                >
+                  + Add account
+                </ActionButton>
+              </>
+            }
+          />
 
           {showConnectedBanks && (
             <div className="mb-6">
@@ -654,59 +629,55 @@ export default function AccountsPage() {
           )}
 
           {showManualForm && (
-            <div className="mb-6 rounded-2xl border border-slate-800 bg-slate-900 p-5">
+            <Panel className="mb-6">
               <div className="mb-5 flex items-start justify-between gap-3">
-                <div>
+                <div className="min-w-0">
                   <h2 className="text-lg font-medium">Add Manual Account</h2>
                   <p className="mt-1 text-sm text-slate-400">
                     Add accounts that are not connected through Plaid.
                   </p>
                 </div>
 
-                <button
-                  type="button"
+                <ActionButton
                   onClick={() => setShowManualForm(false)}
-                  className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-400 hover:bg-slate-800"
+                  className="rounded-lg px-3 py-2 text-xs"
                 >
                   Close
-                </button>
+                </ActionButton>
               </div>
 
               <form
                 onSubmit={addAccount}
                 noValidate
-                className="grid gap-4 lg:grid-cols-[1fr_1fr_1fr_1fr_auto]"
+                className="grid min-w-0 gap-4 lg:grid-cols-[1fr_1fr_1fr_1fr_auto]"
               >
-                <div>
-                  <label className="text-sm text-slate-300">Account Name</label>
+                <FormField label="Account Name">
                   <input
                     value={name}
                     onChange={(event) => setName(event.target.value)}
                     placeholder="Chase Checking"
-                    className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                    className="mt-1 w-full min-w-0 rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
                   />
-                </div>
+                </FormField>
 
-                <div>
-                  <label className="text-sm text-slate-300">Institution</label>
+                <FormField label="Institution">
                   <input
                     value={institutionName}
                     onChange={(event) =>
                       setInstitutionName(event.target.value)
                     }
                     placeholder="Chase"
-                    className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                    className="mt-1 w-full min-w-0 rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
                   />
-                </div>
+                </FormField>
 
-                <div>
-                  <label className="text-sm text-slate-300">Type</label>
+                <FormField label="Type">
                   <select
                     value={accountType}
                     onChange={(event) =>
                       setAccountType(event.target.value as AccountType)
                     }
-                    className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                    className="mt-1 w-full min-w-0 rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
                   >
                     {ACCOUNT_TYPE_OPTIONS.map((option) => (
                       <option key={option.value} value={option.value}>
@@ -714,40 +685,40 @@ export default function AccountsPage() {
                       </option>
                     ))}
                   </select>
-                </div>
+                </FormField>
 
-                <div>
-                  <label className="text-sm text-slate-300">Balance</label>
+                <FormField label="Balance">
                   <input
                     value={balance}
                     onChange={(event) => setBalance(event.target.value)}
                     placeholder="5000"
                     type="number"
                     step="0.01"
-                    className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                    className="mt-1 w-full min-w-0 rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
                   />
-                </div>
+                </FormField>
 
                 <div className="flex items-end">
-                  <button
+                  <ActionButton
                     type="submit"
+                    variant="primary"
                     disabled={saving}
-                    className="w-full rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium hover:bg-blue-500 disabled:opacity-60"
+                    className="w-full"
                   >
                     {saving ? "Saving..." : "Save"}
-                  </button>
+                  </ActionButton>
                 </div>
               </form>
-            </div>
+            </Panel>
           )}
 
-          <section className="overflow-hidden rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-sm">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div>
+          <Panel variant="hero">
+            <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
                   Net Worth
                 </p>
-                <p className="mt-2 text-3xl font-semibold">
+                <p className="mt-2 break-words text-3xl font-semibold">
                   {formatCurrency(totals.netWorth)}
                 </p>
                 <p
@@ -762,12 +733,12 @@ export default function AccountsPage() {
                 </p>
               </div>
 
-              <div className="flex flex-wrap gap-2">
-                <select className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-300 outline-none">
+              <div className="flex max-w-full gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
+                <select className="shrink-0 rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-300 outline-none">
                   <option>Net worth performance</option>
                 </select>
 
-                <select className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-300 outline-none">
+                <select className="shrink-0 rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-300 outline-none">
                   <option>All snapshots</option>
                 </select>
               </div>
@@ -827,15 +798,17 @@ export default function AccountsPage() {
                 </AreaChart>
               </ResponsiveContainer>
             </div>
-          </section>
+          </Panel>
 
-          <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-            <section className="space-y-4">
+          <div className="mt-6 grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+            <section className="min-w-0 space-y-4">
               {groupedAccounts.length === 0 ? (
-                <div className="rounded-2xl border border-slate-800 bg-slate-900 p-8 text-center text-slate-500">
-                  No active accounts yet. Connect a bank or add a manual
-                  account.
-                </div>
+                <Panel>
+                  <div className="p-4 text-center text-slate-500">
+                    No active accounts yet. Connect a bank or add a manual
+                    account.
+                  </div>
+                </Panel>
               ) : (
                 groupedAccounts.map((group) => (
                   <AccountGroupCard
@@ -862,7 +835,7 @@ export default function AccountsPage() {
               )}
             </section>
 
-            <aside className="space-y-6">
+            <aside className="min-w-0 space-y-6">
               <SummaryPanel
                 assets={totals.assets}
                 liabilities={totals.liabilities}
@@ -870,7 +843,7 @@ export default function AccountsPage() {
                 liabilityBreakdown={liabilityBreakdown}
               />
 
-              <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+              <Panel>
                 <h2 className="text-lg font-medium">Account Health</h2>
                 <div className="mt-4 space-y-3">
                   <MiniStatus
@@ -898,7 +871,7 @@ export default function AccountsPage() {
                     value={String(snapshots.length)}
                   />
                 </div>
-              </div>
+              </Panel>
             </aside>
           </div>
         </div>
@@ -950,8 +923,8 @@ function AccountGroupCard({
   deleteAccount: (account: Account) => void;
 }) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 shadow-sm">
-      <div className="flex items-center justify-between gap-3 px-5 py-4">
+    <Panel className="overflow-hidden p-0 sm:p-0">
+      <div className="flex min-w-0 items-center justify-between gap-3 px-5 py-4">
         <div className="min-w-0">
           <h2 className="truncate text-lg font-semibold">{group.title}</h2>
           <p
@@ -978,14 +951,14 @@ function AccountGroupCard({
             updatingId === account.id || deletingId === account.id;
 
           return (
-            <div key={account.id} className="px-5 py-4">
+            <div key={account.id} className="min-w-0 px-5 py-4">
               {isEditing ? (
                 <div className="space-y-3">
-                  <div className="grid gap-3 md:grid-cols-2">
+                  <div className="grid min-w-0 gap-3 md:grid-cols-2">
                     <input
                       value={editName}
                       onChange={(event) => setEditName(event.target.value)}
-                      className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                      className="w-full min-w-0 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
                     />
 
                     <input
@@ -993,7 +966,7 @@ function AccountGroupCard({
                       onChange={(event) =>
                         setEditInstitutionName(event.target.value)
                       }
-                      className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                      className="w-full min-w-0 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
                     />
 
                     <select
@@ -1001,7 +974,7 @@ function AccountGroupCard({
                       onChange={(event) =>
                         setEditAccountType(event.target.value as AccountType)
                       }
-                      className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                      className="w-full min-w-0 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
                     >
                       {ACCOUNT_TYPE_OPTIONS.map((option) => (
                         <option key={option.value} value={option.value}>
@@ -1015,46 +988,42 @@ function AccountGroupCard({
                       onChange={(event) => setEditBalance(event.target.value)}
                       type="number"
                       step="0.01"
-                      className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                      className="w-full min-w-0 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
                     />
                   </div>
 
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
+                  <div className="flex flex-wrap gap-2">
+                    <ActionButton
+                      variant="primary"
                       onClick={() => saveAccountEdit(account.id)}
                       disabled={isBusy}
-                      className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white hover:bg-blue-500 disabled:opacity-60"
+                      className="rounded-lg px-3 py-2 text-xs"
                     >
                       {updatingId === account.id ? "Saving..." : "Save"}
-                    </button>
+                    </ActionButton>
 
-                    <button
-                      type="button"
+                    <ActionButton
                       onClick={cancelEditing}
                       disabled={isBusy}
-                      className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800 disabled:opacity-60"
+                      className="rounded-lg px-3 py-2 text-xs"
                     >
                       Cancel
-                    </button>
+                    </ActionButton>
                   </div>
                 </div>
               ) : (
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex min-w-0 flex-wrap items-center gap-2">
                       <p className="truncate font-medium text-slate-100">
                         {account.name}
                       </p>
-                      <span
-                        className={
-                          account.source === "plaid"
-                            ? "rounded-full bg-emerald-500/10 px-2 py-1 text-[11px] text-emerald-300"
-                            : "rounded-full bg-slate-800 px-2 py-1 text-[11px] text-slate-400"
-                        }
+
+                      <StatusPill
+                        tone={account.source === "plaid" ? "good" : "neutral"}
                       >
                         {account.source === "plaid" ? "Plaid" : "Manual"}
-                      </span>
+                      </StatusPill>
                     </div>
 
                     <p className="mt-1 truncate text-xs text-slate-500">
@@ -1063,12 +1032,12 @@ function AccountGroupCard({
                     </p>
                   </div>
 
-                  <div className="flex shrink-0 items-center gap-3">
-                    <p className="text-right text-lg font-semibold">
+                  <div className="flex min-w-0 flex-col gap-2 sm:shrink-0 sm:flex-row sm:items-center sm:gap-3">
+                    <p className="text-left text-lg font-semibold sm:text-right">
                       {formatCurrency(Math.abs(Number(account.balance || 0)))}
                     </p>
 
-                    <div className="flex gap-1">
+                    <div className="grid grid-cols-3 gap-2 sm:flex sm:gap-1">
                       <button
                         type="button"
                         onClick={() => startEditing(account)}
@@ -1103,7 +1072,7 @@ function AccountGroupCard({
           );
         })}
       </div>
-    </div>
+    </Panel>
   );
 }
 
@@ -1119,12 +1088,10 @@ function SummaryPanel({
   liabilityBreakdown: Array<{ title: string; total: number }>;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+    <Panel>
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-medium">Summary</h2>
-        <span className="rounded-full bg-slate-800 px-3 py-1 text-xs text-slate-400">
-          Totals
-        </span>
+        <StatusPill>Totals</StatusPill>
       </div>
 
       <div className="mt-6 space-y-6">
@@ -1142,7 +1109,7 @@ function SummaryPanel({
           tone="liability"
         />
       </div>
-    </div>
+    </Panel>
   );
 }
 
@@ -1199,11 +1166,11 @@ function BreakdownSection({
                   className={
                     tone === "asset"
                       ? index % 2 === 0
-                        ? "h-2 w-2 rounded-full bg-cyan-400"
-                        : "h-2 w-2 rounded-full bg-emerald-500"
+                        ? "h-2 w-2 shrink-0 rounded-full bg-cyan-400"
+                        : "h-2 w-2 shrink-0 rounded-full bg-emerald-500"
                       : index % 2 === 0
-                      ? "h-2 w-2 rounded-full bg-amber-400"
-                      : "h-2 w-2 rounded-full bg-red-500"
+                      ? "h-2 w-2 shrink-0 rounded-full bg-amber-400"
+                      : "h-2 w-2 shrink-0 rounded-full bg-red-500"
                   }
                 />
                 <span className="truncate text-sm text-slate-400">
@@ -1224,9 +1191,26 @@ function BreakdownSection({
 
 function MiniStatus({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-      <span className="text-sm text-slate-400">{label}</span>
-      <span className="text-sm font-medium text-slate-100">{value}</span>
+    <div className="flex min-w-0 items-center justify-between gap-3 border-b border-slate-800 pb-3">
+      <span className="min-w-0 text-sm text-slate-400">{label}</span>
+      <span className="shrink-0 text-sm font-medium text-slate-100">
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function FormField({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="min-w-0">
+      <label className="text-sm text-slate-300">{label}</label>
+      {children}
     </div>
   );
 }
