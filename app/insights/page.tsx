@@ -5,6 +5,13 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import AppNav from "@/components/AppNav";
 import { useToast } from "@/components/ToastProvider";
+import {
+  BudgetPlannedActualChart,
+  CashFlowBreakdownChart,
+  GoalProgressChart,
+  MoneyFlowSankey,
+  TopSpendingChart,
+} from "@/components/WealthCharts";
 
 type AccountType =
   | "checking"
@@ -346,6 +353,29 @@ export default function InsightsPage() {
     };
   }, [monthlyTransactions, budgetItems]);
 
+  const budgetChartRows = useMemo(() => {
+    return budgetItems.map((item) => {
+      const actual =
+        monthlyTransactions
+          .filter(
+            (transaction) =>
+              transaction.transaction_type === "expense" &&
+              transaction.category === item.category
+          )
+          .reduce(
+            (sum, transaction) =>
+              sum + Math.abs(Number(transaction.amount || 0)),
+            0
+          ) || 0;
+
+      return {
+        category: item.category,
+        planned: Number(item.planned_amount || 0),
+        actual,
+      };
+    });
+  }, [budgetItems, monthlyTransactions]);
+
   const goalSummary = useMemo(() => {
     const preparedGoals = goals.map((goal) => ({
       name: goal.name,
@@ -377,6 +407,21 @@ export default function InsightsPage() {
       progress:
         totalTarget > 0 ? Math.min((totalCurrent / totalTarget) * 100, 100) : 0,
     };
+  }, [goals]);
+
+  const goalsChartRows = useMemo(() => {
+    return goals.map((goal) => ({
+      name: goal.name,
+      targetAmount: Number(goal.target_amount || 0),
+      currentAmount: Number(goal.current_amount || 0),
+    }));
+  }, [goals]);
+
+  const estimatedGoalsContribution = useMemo(() => {
+    return goals.reduce(
+      (sum, goal) => sum + Number(goal.monthly_contribution || 0),
+      0
+    );
   }, [goals]);
 
   const ruleBasedInsights = useMemo(() => {
@@ -537,7 +582,7 @@ export default function InsightsPage() {
                   Insights
                 </h1>
                 <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-400">
-                  Review your financial snapshot, rule-based insights, and
+                  Review your financial snapshot, visual trends, money flow, and
                   AI-generated analysis from your Supabase data.
                 </p>
               </div>
@@ -582,6 +627,31 @@ export default function InsightsPage() {
               value={`${Math.round(goalSummary.progress)}%`}
               subtitle={`${formatCurrency(goalSummary.remaining)} remaining`}
               tone={goalSummary.progress >= 50 ? "good" : "info"}
+            />
+          </section>
+
+          <section className="mt-6 grid gap-6 xl:grid-cols-2">
+            <CashFlowBreakdownChart
+              data={{
+                income: monthlySummary.income,
+                spending: monthlySummary.spending,
+                cashFlow: monthlySummary.cashFlow,
+              }}
+            />
+
+            <TopSpendingChart data={topSpendingCategories} />
+
+            <BudgetPlannedActualChart data={budgetChartRows} />
+
+            <GoalProgressChart data={goalsChartRows} />
+          </section>
+
+          <section className="mt-6">
+            <MoneyFlowSankey
+              income={monthlySummary.income}
+              spendingCategories={topSpendingCategories}
+              remainingCashFlow={monthlySummary.cashFlow}
+              goalsContribution={estimatedGoalsContribution}
             />
           </section>
 
@@ -726,45 +796,6 @@ export default function InsightsPage() {
               </section>
 
               <section className="rounded-3xl border border-slate-800 bg-slate-900 p-5">
-                <h2 className="text-lg font-medium">Top Spending</h2>
-                <p className="mt-1 text-sm text-slate-400">
-                  Largest expense categories this month.
-                </p>
-
-                {topSpendingCategories.length === 0 ? (
-                  <p className="mt-5 text-sm text-slate-500">
-                    No expense transactions this month yet.
-                  </p>
-                ) : (
-                  <div className="mt-5 space-y-4">
-                    {topSpendingCategories.map((row) => (
-                      <div key={row.category}>
-                        <div className="mb-1 flex justify-between gap-3 text-sm">
-                          <span className="break-words text-slate-300">
-                            {row.category}
-                          </span>
-                          <span className="shrink-0 font-medium text-slate-200">
-                            {formatCurrency(row.amount)}
-                          </span>
-                        </div>
-                        <div className="h-2 rounded-full bg-slate-800">
-                          <div
-                            className="h-2 rounded-full bg-blue-500"
-                            style={{
-                              width: `${getCategoryPercent(
-                                row.amount,
-                                monthlySummary.spending
-                              )}%`,
-                            }}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </section>
-
-              <section className="rounded-3xl border border-slate-800 bg-slate-900 p-5">
                 <h2 className="text-lg font-medium">Quick Actions</h2>
 
                 <div className="mt-5 grid gap-3">
@@ -805,7 +836,9 @@ function MetricCard({
           <p className="mt-1 text-xs text-slate-500">{subtitle}</p>
         </div>
 
-        <span className={`mt-1 h-3 w-3 shrink-0 rounded-full ${toneClass(tone)}`} />
+        <span
+          className={`mt-1 h-3 w-3 shrink-0 rounded-full ${toneClass(tone)}`}
+        />
       </div>
     </div>
   );
@@ -894,11 +927,6 @@ function insightClass(severity: "good" | "warning" | "danger" | "info") {
   }
 
   return "border-blue-900 bg-blue-950/30 text-blue-100";
-}
-
-function getCategoryPercent(amount: number, total: number) {
-  if (total <= 0) return 0;
-  return Math.min((amount / total) * 100, 100);
 }
 
 function formatCurrency(value: number) {
