@@ -12,6 +12,7 @@ import {
   MoneyFlowSankey,
   TopSpendingChart,
 } from "@/components/WealthCharts";
+// import MonarchSankey from "@/components/MonarchSankey";
 
 type AccountType =
   | "checking"
@@ -283,27 +284,55 @@ export default function InsightsPage() {
     };
   }, [monthlyTransactions]);
 
-  const topSpendingCategories = useMemo(() => {
-    const categoryMap = new Map<string, number>();
+ const topSpendingCategories = useMemo(() => {
+  const categoryMap = new Map<
+    string,
+    {
+      amount: number;
+      children: Map<string, number>;
+    }
+  >();
 
-    monthlyTransactions
-      .filter((transaction) => transaction.transaction_type === "expense")
-      .forEach((transaction) => {
-        categoryMap.set(
-          transaction.category,
-          (categoryMap.get(transaction.category) || 0) +
-            Math.abs(Number(transaction.amount || 0))
-        );
-      });
+  monthlyTransactions
+    .filter((transaction) => transaction.transaction_type === "expense")
+    .forEach((transaction) => {
+      const category = transaction.category || "Uncategorized";
+      const merchant =
+        transaction.merchant_name ||
+        transaction.name ||
+        "Other Transactions";
 
-    return Array.from(categoryMap.entries())
-      .map(([category, amount]) => ({
-        category,
-        amount,
-      }))
-      .sort((a, b) => b.amount - a.amount)
-      .slice(0, 5);
-  }, [monthlyTransactions]);
+      const amount = Math.abs(Number(transaction.amount || 0));
+
+      const existing = categoryMap.get(category) || {
+        amount: 0,
+        children: new Map<string, number>(),
+      };
+
+      existing.amount += amount;
+      existing.children.set(
+        merchant,
+        (existing.children.get(merchant) || 0) + amount
+      );
+
+      categoryMap.set(category, existing);
+    });
+
+  return Array.from(categoryMap.entries())
+    .map(([category, data]) => ({
+      category,
+      amount: data.amount,
+      children: Array.from(data.children.entries())
+        .map(([name, amount]) => ({
+          name,
+          amount,
+        }))
+        .sort((a, b) => b.amount - a.amount)
+        .slice(0, 5),
+    }))
+    .sort((a, b) => b.amount - a.amount)
+    .slice(0, 8);
+}, [monthlyTransactions]);
 
   const budgetSummary = useMemo(() => {
     const expenseTransactions = monthlyTransactions.filter(
@@ -578,9 +607,11 @@ export default function InsightsPage() {
             <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
               <div>
                 <p className="text-sm text-blue-300">WealthOS Intelligence</p>
+
                 <h1 className="mt-2 text-3xl font-semibold tracking-tight md:text-4xl">
                   Insights
                 </h1>
+
                 <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-400">
                   Review your financial snapshot, visual trends, money flow, and
                   AI-generated analysis from your Supabase data.
@@ -646,14 +677,14 @@ export default function InsightsPage() {
             <GoalProgressChart data={goalsChartRows} />
           </section>
 
-          <section className="mt-6">
-            <MoneyFlowSankey
-              income={monthlySummary.income}
-              spendingCategories={topSpendingCategories}
-              remainingCashFlow={monthlySummary.cashFlow}
-              goalsContribution={estimatedGoalsContribution}
-            />
-          </section>
+<section className="mt-6">
+  <MoneyFlowSankey
+    income={monthlySummary.income}
+    spendingCategories={topSpendingCategories}
+    remainingCashFlow={monthlySummary.cashFlow}
+    goalsContribution={estimatedGoalsContribution}
+  />
+</section>
 
           <section className="mt-6 grid gap-6 xl:grid-cols-[1fr_420px]">
             <div className="space-y-6">
@@ -661,6 +692,7 @@ export default function InsightsPage() {
                 <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                   <div>
                     <h2 className="text-lg font-medium">AI Analysis</h2>
+
                     <p className="text-sm text-slate-400">
                       Generated from your current accounts, transactions,
                       budgets, and goals.
@@ -679,6 +711,7 @@ export default function InsightsPage() {
                     <p className="text-sm font-medium text-slate-200">
                       No AI insights generated yet
                     </p>
+
                     <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-slate-500">
                       Click Generate AI Insights to create a concise analysis.
                       If no OpenAI key is configured, WealthOS will return a
@@ -700,6 +733,7 @@ export default function InsightsPage() {
                       <p className="text-sm font-medium text-blue-200">
                         Summary
                       </p>
+
                       <p className="mt-2 text-sm leading-6 text-blue-100/80">
                         {aiInsights.summary}
                       </p>
@@ -730,6 +764,7 @@ export default function InsightsPage() {
                             <p className="text-sm font-medium text-slate-200">
                               {index + 1}. {action.title}
                             </p>
+
                             <p className="mt-1 text-sm leading-6 text-slate-400">
                               {action.detail}
                             </p>
@@ -743,6 +778,7 @@ export default function InsightsPage() {
 
               <section className="rounded-3xl border border-slate-800 bg-slate-900 p-5">
                 <h2 className="text-lg font-medium">Rule-Based Insights</h2>
+
                 <p className="mt-1 text-sm text-slate-400">
                   Always available, even without an AI API key.
                 </p>
@@ -763,6 +799,7 @@ export default function InsightsPage() {
             <aside className="space-y-6">
               <section className="rounded-3xl border border-slate-800 bg-slate-900 p-5">
                 <h2 className="text-lg font-medium">Data Readiness</h2>
+
                 <p className="mt-1 text-sm text-slate-400">
                   More complete data creates better insights.
                 </p>
@@ -774,18 +811,21 @@ export default function InsightsPage() {
                     complete={accountSummary.activeAccounts > 0}
                     href="/accounts"
                   />
+
                   <ReadinessRow
                     label="Transactions"
                     value={`${monthlySummary.transactionCount} this month`}
                     complete={monthlySummary.transactionCount > 0}
                     href="/transactions"
                   />
+
                   <ReadinessRow
                     label="Budgets"
                     value={`${budgetItems.length} categories`}
                     complete={budgetItems.length > 0}
                     href="/budgets"
                   />
+
                   <ReadinessRow
                     label="Goals"
                     value={`${goals.length} tracked`}
@@ -800,11 +840,14 @@ export default function InsightsPage() {
 
                 <div className="mt-5 grid gap-3">
                   <QuickAction href="/accounts" label="Update Accounts" />
+
                   <QuickAction
                     href="/transactions"
                     label="Add Transactions"
                   />
+
                   <QuickAction href="/budgets" label="Review Budgets" />
+
                   <QuickAction href="/goals" label="Update Goals" />
                 </div>
               </section>
@@ -832,7 +875,9 @@ function MetricCard({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-sm text-slate-400">{title}</p>
+
           <p className="mt-2 break-words text-2xl font-semibold">{value}</p>
+
           <p className="mt-1 text-xs text-slate-500">{subtitle}</p>
         </div>
 
@@ -856,6 +901,7 @@ function InsightCard({
   return (
     <div className={`rounded-2xl border p-5 ${insightClass(severity)}`}>
       <p className="text-sm font-medium">{title}</p>
+
       <p className="mt-2 text-sm leading-6 opacity-85">{detail}</p>
     </div>
   );
@@ -879,6 +925,7 @@ function ReadinessRow({
     >
       <div>
         <p className="text-sm font-medium text-slate-200">{label}</p>
+
         <p className="mt-1 text-xs text-slate-500">{value}</p>
       </div>
 
