@@ -75,7 +75,7 @@ export default function PlaidConnectionsPanel({
     const confirmed = await confirm({
       title: `Disconnect ${connection.institution_name}?`,
       message:
-        "This will disconnect the institution from Plaid and archive linked WealthOS accounts. Existing synced transactions will remain unless deleted separately.",
+        "This disconnects the bank and archives linked WealthOS accounts. Synced transactions will remain unless deleted separately.",
       confirmLabel: "Disconnect",
       cancelLabel: "Cancel",
       variant: "danger",
@@ -113,7 +113,7 @@ export default function PlaidConnectionsPanel({
 
     showToast({
       type: "success",
-      title: "Institution disconnected",
+      title: "Bank disconnected",
       message: `${connection.institution_name} was disconnected.`,
     });
 
@@ -127,89 +127,109 @@ export default function PlaidConnectionsPanel({
   }, []);
 
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <section className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+      <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h3 className="text-sm font-medium text-slate-200">
-            Connected Institutions
+          <h3 className="text-sm font-semibold text-slate-100">
+            Connected Banks
           </h3>
-          <p className="mt-1 text-xs leading-5 text-slate-500">
-            Manage linked banks and refresh balances/transactions.
+          <p className="mt-1 text-xs text-slate-500">
+            Sync balances and transactions from linked institutions.
           </p>
         </div>
 
-        <PlaidSyncButton
-          label="Sync Bank Data"
-          onComplete={() => {
-            loadConnections();
-            onChanged?.();
-          }}
-        />
+        {connections.length > 0 && (
+          <PlaidSyncButton
+            label="Sync"
+            onComplete={() => {
+              loadConnections();
+              onChanged?.();
+            }}
+          />
+        )}
       </div>
 
       {loading ? (
         <div className="mt-4 rounded-xl border border-slate-800 bg-slate-900 p-4 text-sm text-slate-500">
-          Loading Plaid connections...
+          Loading connected banks...
         </div>
       ) : connections.length === 0 ? (
-        <div className="mt-4 rounded-xl border border-slate-800 bg-slate-900 p-4 text-sm text-slate-500">
-          No connected institutions yet.
+        <div className="mt-4 rounded-xl border border-dashed border-slate-800 bg-slate-900/60 p-4 text-sm text-slate-500">
+          No banks connected yet.
         </div>
       ) : (
-        <div className="mt-4 space-y-3">
+        <div className="mt-4 divide-y divide-slate-800 overflow-hidden rounded-xl border border-slate-800 bg-slate-900">
           {connections.map((connection) => (
             <div
               key={connection.id}
-              className="rounded-xl border border-slate-800 bg-slate-900 p-3"
+              className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"
             >
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-slate-100">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="truncate text-sm font-medium text-slate-100">
                     {connection.institution_name}
                   </p>
 
-                  <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500">
-                    <span>
-                      {connection.account_count} linked account
-                      {connection.account_count === 1 ? "" : "s"}
-                    </span>
-                    <span>
-                      Last synced:{" "}
-                      {connection.last_synced_at
-                        ? formatDateTime(connection.last_synced_at)
-                        : "Not synced yet"}
-                    </span>
-                  </div>
+                  <span className="rounded-full bg-emerald-500/10 px-2 py-1 text-[11px] font-medium text-emerald-300">
+                    Connected
+                  </span>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => disconnectConnection(connection)}
-                  disabled={disconnectingId === connection.id}
-                  className="shrink-0 rounded-lg border border-red-900 px-3 py-2 text-xs text-red-300 hover:bg-red-950 disabled:opacity-60"
-                >
-                  {disconnectingId === connection.id
-                    ? "Disconnecting..."
-                    : "Disconnect"}
-                </button>
+                <p className="mt-1 text-xs text-slate-500">
+                  {connection.account_count} linked account
+                  {connection.account_count === 1 ? "" : "s"} ·{" "}
+                  {connection.last_synced_at
+                    ? `Synced ${formatRelativeTime(connection.last_synced_at)}`
+                    : "Not synced yet"}
+                </p>
               </div>
+
+              <button
+                type="button"
+                onClick={() => disconnectConnection(connection)}
+                disabled={disconnectingId === connection.id}
+                className="shrink-0 rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-400 hover:border-red-900 hover:bg-red-950 hover:text-red-300 disabled:opacity-60"
+              >
+                {disconnectingId === connection.id
+                  ? "Disconnecting..."
+                  : "Disconnect"}
+              </button>
             </div>
           ))}
         </div>
       )}
-    </div>
+    </section>
   );
 }
 
-function formatDateTime(value: string) {
+function formatRelativeTime(value: string) {
   const parsed = new Date(value);
 
-  if (Number.isNaN(parsed.getTime())) return "Unknown";
+  if (Number.isNaN(parsed.getTime())) return "recently";
+
+  const diffMs = Date.now() - parsed.getTime();
+  const diffMinutes = Math.max(Math.floor(diffMs / 60000), 0);
+
+  if (diffMinutes < 1) return "just now";
+  if (diffMinutes < 60) {
+    return `${diffMinutes} min ago`;
+  }
+
+  const diffHours = Math.floor(diffMinutes / 60);
+
+  if (diffHours < 24) {
+    return `${diffHours} hr${diffHours === 1 ? "" : "s"} ago`;
+  }
+
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffDays < 7) {
+    return `${diffDays} day${diffDays === 1 ? "" : "s"} ago`;
+  }
 
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
+    year: "numeric",
   }).format(parsed);
 }
