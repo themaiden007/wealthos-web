@@ -67,6 +67,7 @@ export async function POST(request: NextRequest) {
     const institution = metadata.institution || {};
     const institutionName = institution.name || "Connected Institution";
     const institutionId = institution.institution_id || null;
+    const now = new Date().toISOString();
 
     const { data: plaidItem, error: plaidItemError } = await serverSupabase
       .from("plaid_items")
@@ -79,7 +80,7 @@ export async function POST(request: NextRequest) {
           institution_name: institutionName,
           products: ["transactions"],
           is_active: true,
-          updated_at: new Date().toISOString(),
+          updated_at: now,
         },
         {
           onConflict: "user_id,plaid_item_id",
@@ -93,6 +94,37 @@ export async function POST(request: NextRequest) {
         { error: plaidItemError?.message || "Failed to save Plaid item." },
         { status: 500 }
       );
+    }
+
+    const duplicateItemQuery = serverSupabase
+      .from("plaid_items")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("is_active", true)
+      .neq("id", plaidItem.id);
+
+    const { data: duplicateItems } = institutionId
+      ? await duplicateItemQuery.eq("institution_id", institutionId)
+      : await duplicateItemQuery.eq("institution_name", institutionName);
+
+    const duplicateItemIds = (duplicateItems || []).map((item) => item.id);
+
+    if (duplicateItemIds.length > 0) {
+      await serverSupabase
+        .from("plaid_items")
+        .update({
+          is_active: false,
+          updated_at: now,
+        })
+        .in("id", duplicateItemIds);
+
+      await serverSupabase
+        .from("plaid_accounts")
+        .update({
+          is_active: false,
+          updated_at: now,
+        })
+        .in("plaid_item_id", duplicateItemIds);
     }
 
     const accountsResponse = await plaidClient.accountsGet({
@@ -128,7 +160,7 @@ export async function POST(request: NextRequest) {
             currency,
             source: "plaid",
             is_active: true,
-            updated_at: new Date().toISOString(),
+            updated_at: now,
           })
           .eq("id", existingPlaidAccount.wealthos_account_id);
 
@@ -149,7 +181,7 @@ export async function POST(request: NextRequest) {
             available_balance: plaidAccount.balances.available,
             iso_currency_code: currency,
             is_active: true,
-            updated_at: new Date().toISOString(),
+            updated_at: now,
           })
           .eq("id", existingPlaidAccount.id);
 
@@ -176,7 +208,7 @@ export async function POST(request: NextRequest) {
               balance: accountBalance,
               currency,
               is_active: true,
-              updated_at: new Date().toISOString(),
+              updated_at: now,
             })
             .eq("id", wealthAccount.id)
             .select()
@@ -199,7 +231,7 @@ export async function POST(request: NextRequest) {
               currency,
               source: "plaid",
               is_active: true,
-              updated_at: new Date().toISOString(),
+              updated_at: now,
             })
             .select()
             .single();
@@ -230,7 +262,7 @@ export async function POST(request: NextRequest) {
             available_balance: plaidAccount.balances.available,
             iso_currency_code: currency,
             is_active: true,
-            updated_at: new Date().toISOString(),
+            updated_at: now,
           },
           {
             onConflict: "user_id,plaid_account_id",
@@ -250,6 +282,7 @@ export async function POST(request: NextRequest) {
       accounts_created: createdAccounts,
       accounts_updated: updatedAccounts,
       accounts_linked: linkedAccounts,
+      duplicate_items_archived: duplicateItemIds.length,
     });
   } catch (error: any) {
     const message =

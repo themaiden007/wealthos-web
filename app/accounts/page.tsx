@@ -7,6 +7,8 @@ import { useToast } from "@/components/ToastProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
 import PlaidConnectButton from "@/components/PlaidConnectButton";
 import PlaidSyncButton from "@/components/PlaidSyncButton";
+import PlaidConnectionsPanel from "@/components/PlaidConnectionsPanel";
+
 type AccountType =
   | "checking"
   | "savings"
@@ -420,6 +422,7 @@ export default function AccountsPage() {
   />
 
   <PlaidSyncButton
+  label="Sync Bank Data"
     onComplete={() => {
       if (userId) {
         loadAccountsForUser(userId);
@@ -456,7 +459,15 @@ export default function AccountsPage() {
                       below.
                     </p>
                   </div>
-
+            <div className="mt-5">
+  <PlaidConnectionsPanel
+    onChanged={() => {
+      if (userId) {
+        loadAccountsForUser(userId);
+      }
+    }}
+  />
+</div>
                   <PlaidConnectButton
                     onComplete={() => {
                       if (userId) {

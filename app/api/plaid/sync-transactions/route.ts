@@ -395,6 +395,7 @@ export async function POST(request: NextRequest) {
         .from("plaid_items")
         .update({
           transactions_cursor: cursor,
+          last_synced_at: now,
           updated_at: now,
         })
         .eq("id", item.id);
