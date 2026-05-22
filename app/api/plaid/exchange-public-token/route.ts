@@ -66,6 +66,7 @@ export async function POST(request: NextRequest) {
 
     const institution = metadata.institution || {};
     const institutionName = institution.name || "Connected Institution";
+    const institutionId = institution.institution_id || null;
 
     const { data: plaidItem, error: plaidItemError } = await serverSupabase
       .from("plaid_items")
@@ -74,7 +75,7 @@ export async function POST(request: NextRequest) {
           user_id: user.id,
           plaid_item_id: plaidItemId,
           access_token: plaidAccessToken,
-          institution_id: institution.institution_id || null,
+          institution_id: institutionId,
           institution_name: institutionName,
           products: ["transactions"],
           is_active: true,
@@ -98,7 +99,9 @@ export async function POST(request: NextRequest) {
       access_token: plaidAccessToken,
     });
 
-    const createdAccounts = [];
+    let createdAccounts = 0;
+    let updatedAccounts = 0;
+    let linkedAccounts = 0;
 
     for (const plaidAccount of accountsResponse.data.accounts) {
       const accountType = mapPlaidAccountType(
@@ -108,27 +111,106 @@ export async function POST(request: NextRequest) {
 
       const accountBalance = Number(plaidAccount.balances.current || 0);
       const currency = plaidAccount.balances.iso_currency_code || "USD";
+      const mask = plaidAccount.mask || null;
 
-      const { data: wealthAccount, error: wealthAccountError } =
-        await serverSupabase
+      const { data: existingPlaidAccount } = await serverSupabase
+        .from("plaid_accounts")
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("plaid_account_id", plaidAccount.account_id)
+        .maybeSingle();
+
+      if (existingPlaidAccount?.wealthos_account_id) {
+        const { error: updateExistingError } = await serverSupabase
           .from("accounts")
-          .insert({
-            user_id: user.id,
-            name: plaidAccount.name,
-            institution_name: institutionName,
-            account_type: accountType,
+          .update({
             balance: accountBalance,
             currency,
             source: "plaid",
             is_active: true,
             updated_at: new Date().toISOString(),
           })
-          .select()
-          .single();
+          .eq("id", existingPlaidAccount.wealthos_account_id);
 
-      if (wealthAccountError || !wealthAccount) {
-        console.warn("Failed to create WealthOS account:", wealthAccountError);
+        if (!updateExistingError) {
+          updatedAccounts += 1;
+        }
+
+        await serverSupabase
+          .from("plaid_accounts")
+          .update({
+            plaid_item_id: plaidItem.id,
+            name: plaidAccount.name,
+            official_name: plaidAccount.official_name || null,
+            type: plaidAccount.type || null,
+            subtype: plaidAccount.subtype || null,
+            mask,
+            current_balance: accountBalance,
+            available_balance: plaidAccount.balances.available,
+            iso_currency_code: currency,
+            is_active: true,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", existingPlaidAccount.id);
+
         continue;
+      }
+
+      const { data: matchingWealthAccount } = await serverSupabase
+        .from("accounts")
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("name", plaidAccount.name)
+        .eq("institution_name", institutionName)
+        .eq("source", "plaid")
+        .maybeSingle();
+
+      let wealthAccount = matchingWealthAccount;
+
+      if (wealthAccount) {
+        const { data: updatedWealthAccount, error: updateError } =
+          await serverSupabase
+            .from("accounts")
+            .update({
+              account_type: accountType,
+              balance: accountBalance,
+              currency,
+              is_active: true,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", wealthAccount.id)
+            .select()
+            .single();
+
+        if (!updateError && updatedWealthAccount) {
+          wealthAccount = updatedWealthAccount;
+          updatedAccounts += 1;
+        }
+      } else {
+        const { data: createdWealthAccount, error: createError } =
+          await serverSupabase
+            .from("accounts")
+            .insert({
+              user_id: user.id,
+              name: plaidAccount.name,
+              institution_name: institutionName,
+              account_type: accountType,
+              balance: accountBalance,
+              currency,
+              source: "plaid",
+              is_active: true,
+              updated_at: new Date().toISOString(),
+            })
+            .select()
+            .single();
+
+        if (createError || !createdWealthAccount) {
+          console.warn("Failed to create WealthOS account:", createError);
+          continue;
+        }
+
+        wealthAccount = createdWealthAccount;
+        createdAccounts += 1;
       }
 
       const { error: plaidAccountError } = await serverSupabase
@@ -143,7 +225,7 @@ export async function POST(request: NextRequest) {
             official_name: plaidAccount.official_name || null,
             type: plaidAccount.type || null,
             subtype: plaidAccount.subtype || null,
-            mask: plaidAccount.mask || null,
+            mask,
             current_balance: accountBalance,
             available_balance: plaidAccount.balances.available,
             iso_currency_code: currency,
@@ -157,15 +239,17 @@ export async function POST(request: NextRequest) {
 
       if (plaidAccountError) {
         console.warn("Failed to save Plaid account:", plaidAccountError);
+      } else {
+        linkedAccounts += 1;
       }
-
-      createdAccounts.push(wealthAccount);
     }
 
     return NextResponse.json({
       success: true,
       item_id: plaidItemId,
-      accounts_created: createdAccounts.length,
+      accounts_created: createdAccounts,
+      accounts_updated: updatedAccounts,
+      accounts_linked: linkedAccounts,
     });
   } catch (error: any) {
     const message =
