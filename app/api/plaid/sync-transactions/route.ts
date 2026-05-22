@@ -412,7 +412,46 @@ export async function POST(request: NextRequest) {
       totalRemoved += removed.length;
       totalInsertedOrUpdated += upsertTransactions.length;
     }
+const { data: activeAccounts } = await serverSupabase
+  .from("accounts")
+  .select("account_type, balance")
+  .eq("user_id", user.id)
+  .eq("is_active", true);
 
+const snapshotAssets = (activeAccounts || [])
+  .filter((account) =>
+    [
+      "checking",
+      "savings",
+      "cash",
+      "investment",
+      "vehicle",
+      "real_estate",
+      "other_asset",
+    ].includes(account.account_type)
+  )
+  .reduce((sum, account) => sum + Number(account.balance || 0), 0);
+
+const snapshotLiabilities = (activeAccounts || [])
+  .filter((account) =>
+    ["credit_card", "loan", "other_liability"].includes(account.account_type)
+  )
+  .reduce((sum, account) => sum + Math.abs(Number(account.balance || 0)), 0);
+
+await serverSupabase.from("net_worth_snapshots").upsert(
+  {
+    user_id: user.id,
+    snapshot_date: new Date().toISOString().slice(0, 10),
+    assets: snapshotAssets,
+    liabilities: snapshotLiabilities,
+    net_worth: snapshotAssets - snapshotLiabilities,
+    source: "plaid_sync",
+    updated_at: new Date().toISOString(),
+  },
+  {
+    onConflict: "user_id,snapshot_date",
+  }
+);
     return NextResponse.json({
       success: true,
       balances_updated: totalBalancesUpdated,

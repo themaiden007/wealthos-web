@@ -43,6 +43,18 @@ type Account = {
   updated_at: string;
 };
 
+type NetWorthSnapshot = {
+  id: string;
+  user_id: string;
+  snapshot_date: string;
+  assets: number;
+  liabilities: number;
+  net_worth: number;
+  source: string;
+  created_at: string;
+  updated_at: string;
+};
+
 const ASSET_TYPES: AccountType[] = [
   "checking",
   "savings",
@@ -124,6 +136,7 @@ export default function AccountsPage() {
   const { confirm } = useConfirm();
 
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [snapshots, setSnapshots] = useState<NetWorthSnapshot[]>([]);
   const [userId, setUserId] = useState("");
   const [userEmail, setUserEmail] = useState("");
   const [hasLoaded, setHasLoaded] = useState(false);
@@ -166,6 +179,56 @@ export default function AccountsPage() {
     setAccounts((data || []) as Account[]);
   }
 
+  async function loadNetWorthSnapshots(nextUserId: string) {
+    const { data, error } = await supabase
+      .from("net_worth_snapshots")
+      .select("*")
+      .eq("user_id", nextUserId)
+      .order("snapshot_date", { ascending: true });
+
+    if (error) {
+      console.warn("Failed to load net worth snapshots:", error.message);
+      return;
+    }
+
+    setSnapshots((data || []) as NetWorthSnapshot[]);
+  }
+
+  async function createNetWorthSnapshot(source = "manual") {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    const authToken = session?.access_token;
+
+    if (!authToken || !userId) return;
+
+    const response = await fetch("/api/net-worth/snapshot", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${authToken}`,
+      },
+      body: JSON.stringify({ source }),
+    });
+
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      console.warn("Snapshot failed:", data.error || "Unknown snapshot error");
+      return;
+    }
+
+    await loadNetWorthSnapshots(userId);
+  }
+
+  async function refreshAccountsAndSnapshots(source = "manual_refresh") {
+    if (!userId) return;
+
+    await loadAccountsForUser(userId);
+    await createNetWorthSnapshot(source);
+    await loadNetWorthSnapshots(userId);
+  }
+
   useEffect(() => {
     async function initialize() {
       const {
@@ -181,6 +244,7 @@ export default function AccountsPage() {
       setUserEmail(user.email || "");
 
       await loadAccountsForUser(user.id);
+      await loadNetWorthSnapshots(user.id);
 
       setHasLoaded(true);
     }
@@ -237,35 +301,33 @@ export default function AccountsPage() {
   }, [groupedAccounts]);
 
   const netWorthTrend = useMemo(() => {
-    const now = new Date();
-    const current = totals.netWorth;
-
-    const previousBase = Math.max(
-      current - Math.max(Math.abs(current) * 0.08, 500),
-      0
-    );
-
-    return Array.from({ length: 6 }).map((_, index) => {
-      const date = new Date(now);
-      date.setDate(now.getDate() - (5 - index));
-
-      const progress = index / 5;
-      const value =
-        previousBase + (current - previousBase) * progress + index * 50;
-
-      return {
-        label: date.toLocaleDateString("en-US", {
+    if (snapshots.length > 0) {
+      return snapshots.map((snapshot) => ({
+        label: new Date(snapshot.snapshot_date).toLocaleDateString("en-US", {
           month: "short",
           day: "numeric",
         }),
-        value: Math.round(index === 5 ? current : value),
-      };
-    });
-  }, [totals.netWorth]);
+        value: Math.round(Number(snapshot.net_worth || 0)),
+      }));
+    }
+
+    const today = new Date();
+
+    return [
+      {
+        label: today.toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+        }),
+        value: Math.round(totals.netWorth),
+      },
+    ];
+  }, [snapshots, totals.netWorth]);
 
   const oneMonthChange = useMemo(() => {
     const first = netWorthTrend[0]?.value || 0;
     const last = netWorthTrend[netWorthTrend.length - 1]?.value || 0;
+
     return last - first;
   }, [netWorthTrend]);
 
@@ -340,6 +402,9 @@ export default function AccountsPage() {
     setAccountType("checking");
     setBalance("");
     setShowManualForm(false);
+
+    await createNetWorthSnapshot("manual_account_add");
+    await loadNetWorthSnapshots(userId);
 
     showToast({
       type: "success",
@@ -419,6 +484,9 @@ export default function AccountsPage() {
 
     cancelEditing();
 
+    await createNetWorthSnapshot("manual_account_edit");
+    await loadNetWorthSnapshots(userId);
+
     showToast({
       type: "success",
       title: "Account updated",
@@ -463,6 +531,13 @@ export default function AccountsPage() {
 
     setAccounts((current) => current.filter((item) => item.id !== account.id));
 
+    await createNetWorthSnapshot(
+      account.source === "plaid"
+        ? "plaid_account_delete"
+        : "manual_account_delete"
+    );
+    await loadNetWorthSnapshots(userId);
+
     showToast({
       type: "success",
       title: isPlaidAccount ? "Plaid account archived" : "Account deleted",
@@ -497,6 +572,9 @@ export default function AccountsPage() {
     setAccounts((current) =>
       current.map((item) => (item.id === account.id ? (data as Account) : item))
     );
+
+    await createNetWorthSnapshot("account_status_change");
+    await loadNetWorthSnapshots(userId);
 
     showToast({
       type: "success",
@@ -544,18 +622,14 @@ export default function AccountsPage() {
 
               <PlaidSyncButton
                 label="Refresh all"
-                onComplete={() => {
-                  if (userId) {
-                    loadAccountsForUser(userId);
-                  }
+                onComplete={async () => {
+                  await refreshAccountsAndSnapshots("plaid_sync");
                 }}
               />
 
               <PlaidConnectButton
-                onComplete={() => {
-                  if (userId) {
-                    loadAccountsForUser(userId);
-                  }
+                onComplete={async () => {
+                  await refreshAccountsAndSnapshots("plaid_connect");
                 }}
               />
 
@@ -572,10 +646,8 @@ export default function AccountsPage() {
           {showConnectedBanks && (
             <div className="mb-6">
               <PlaidConnectionsPanel
-                onChanged={() => {
-                  if (userId) {
-                    loadAccountsForUser(userId);
-                  }
+                onChanged={async () => {
+                  await refreshAccountsAndSnapshots("plaid_connections_change");
                 }}
               />
             </div>
@@ -686,8 +758,7 @@ export default function AccountsPage() {
                   }
                 >
                   {oneMonthChange >= 0 ? "↗" : "↘"}{" "}
-                  {formatCurrency(Math.abs(oneMonthChange))} estimated recent
-                  change
+                  {formatCurrency(Math.abs(oneMonthChange))} net worth change
                 </p>
               </div>
 
@@ -697,7 +768,7 @@ export default function AccountsPage() {
                 </select>
 
                 <select className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-300 outline-none">
-                  <option>1 month</option>
+                  <option>All snapshots</option>
                 </select>
               </div>
             </div>
@@ -706,9 +777,23 @@ export default function AccountsPage() {
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={netWorthTrend}>
                   <defs>
-                    <linearGradient id="netWorthFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.35} />
-                      <stop offset="95%" stopColor="#06b6d4" stopOpacity={0.02} />
+                    <linearGradient
+                      id="netWorthFill"
+                      x1="0"
+                      y1="0"
+                      x2="0"
+                      y2="1"
+                    >
+                      <stop
+                        offset="5%"
+                        stopColor="#06b6d4"
+                        stopOpacity={0.35}
+                      />
+                      <stop
+                        offset="95%"
+                        stopColor="#06b6d4"
+                        stopOpacity={0.02}
+                      />
                     </linearGradient>
                   </defs>
                   <XAxis
@@ -795,8 +880,9 @@ export default function AccountsPage() {
                   <MiniStatus
                     label="Connected by Plaid"
                     value={String(
-                      activeAccounts.filter((account) => account.source === "plaid")
-                        .length
+                      activeAccounts.filter(
+                        (account) => account.source === "plaid"
+                      ).length
                     )}
                   />
                   <MiniStatus
@@ -806,6 +892,10 @@ export default function AccountsPage() {
                         (account) => account.source !== "plaid"
                       ).length
                     )}
+                  />
+                  <MiniStatus
+                    label="Snapshot records"
+                    value={String(snapshots.length)}
                   />
                 </div>
               </div>
