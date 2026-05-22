@@ -7,6 +7,11 @@ import AppNav from "@/components/AppNav";
 import { useToast } from "@/components/ToastProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
 import PlaidSyncButton from "@/components/PlaidSyncButton";
+import PageHeader from "@/components/ui/PageHeader";
+import Panel from "@/components/ui/Panel";
+import MetricCard from "@/components/ui/MetricCard";
+import ActionButton from "@/components/ui/ActionButton";
+import StatusPill from "@/components/ui/StatusPill";
 
 type AccountType =
   | "checking"
@@ -1140,40 +1145,34 @@ export default function TransactionsPage() {
 
       <div className="min-w-0 flex-1">
         <div className="mx-auto w-full max-w-7xl overflow-x-hidden px-4 py-6 pb-28 sm:px-6 lg:px-8 md:pb-8">
-          <div className="mb-6 flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="min-w-0">
-              <p className="text-sm text-slate-400">WealthOS</p>
-              <h1 className="mt-1 text-3xl font-semibold">Transactions</h1>
-              <p className="mt-1 text-sm text-slate-500">
-                Track spending, sync banks, import files, and review cash flow.
-              </p>
-            </div>
+          <PageHeader
+            title="Transactions"
+            description="Track spending, sync banks, import files, and review cash flow."
+            actions={
+              <>
+                <PlaidSyncButton
+                  label="Sync Bank Data"
+                  onComplete={reloadTransactions}
+                />
 
-            <div className="flex max-w-full flex-wrap gap-2">
-              <PlaidSyncButton
-                label="Sync Bank Data"
-                onComplete={reloadTransactions}
-              />
+                <ActionButton
+                  onClick={() => setShowImporter((current) => !current)}
+                >
+                  Smart Import
+                </ActionButton>
 
-              <button
-                type="button"
-                onClick={() => setShowImporter((current) => !current)}
-                className="shrink-0 rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-900"
-              >
-                Smart Import
-              </button>
+                <ActionButton
+                  variant="primary"
+                  onClick={() => setShowManualForm((current) => !current)}
+                  className="bg-orange-600 hover:bg-orange-500"
+                >
+                  + Add Transaction
+                </ActionButton>
+              </>
+            }
+          />
 
-              <button
-                type="button"
-                onClick={() => setShowManualForm((current) => !current)}
-                className="shrink-0 rounded-xl bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-500"
-              >
-                + Add Transaction
-              </button>
-            </div>
-          </div>
-
-          <section className="min-w-0 overflow-hidden rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-sm">
+          <Panel variant="hero">
             <div className="grid min-w-0 gap-6 lg:grid-cols-[1.2fr_0.8fr]">
               <div className="min-w-0">
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
@@ -1238,27 +1237,27 @@ export default function TransactionsPage() {
               </div>
 
               <div className="grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-1">
-                <MetricTile
+                <MetricCard
                   title="Income"
                   value={formatCurrency(monthlySummary.income)}
-                  tone="income"
+                  tone="good"
                 />
-                <MetricTile
+                <MetricCard
                   title="Spending"
                   value={formatCurrency(monthlySummary.spending)}
-                  tone="expense"
+                  tone="bad"
                 />
-                <MetricTile
+                <MetricCard
                   title="Transfers"
                   value={formatCurrency(monthlySummary.transfers)}
-                  tone="neutral"
+                  tone="muted"
                 />
               </div>
             </div>
-          </section>
+          </Panel>
 
           {showManualForm && (
-            <section className="mt-6 min-w-0 rounded-2xl border border-slate-800 bg-slate-900 p-5">
+            <Panel className="mt-6">
               <div className="mb-5 flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <h2 className="text-lg font-medium">Add Transaction</h2>
@@ -1267,13 +1266,12 @@ export default function TransactionsPage() {
                   </p>
                 </div>
 
-                <button
-                  type="button"
+                <ActionButton
                   onClick={() => setShowManualForm(false)}
-                  className="shrink-0 rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-400 hover:bg-slate-800"
+                  className="rounded-lg px-3 py-2 text-xs"
                 >
                   Close
-                </button>
+                </ActionButton>
               </div>
 
               {accounts.length === 0 ? (
@@ -1332,13 +1330,14 @@ export default function TransactionsPage() {
                   </div>
 
                   <div className="flex items-end">
-                    <button
+                    <ActionButton
                       type="submit"
+                      variant="primary"
                       disabled={saving}
-                      className="w-full shrink-0 rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium hover:bg-blue-500 disabled:opacity-60"
+                      className="w-full"
                     >
                       {saving ? "Saving..." : "Save"}
-                    </button>
+                    </ActionButton>
                   </div>
 
                   <div className="min-w-0">
@@ -1372,11 +1371,11 @@ export default function TransactionsPage() {
                   </div>
                 </form>
               )}
-            </section>
+            </Panel>
           )}
 
           {showImporter && (
-            <section className="mt-6 min-w-0 rounded-2xl border border-slate-800 bg-slate-900 p-5">
+            <Panel className="mt-6">
               <SmartImporterPanel
                 accounts={accounts}
                 accountId={accountId}
@@ -1414,11 +1413,11 @@ export default function TransactionsPage() {
                 createCategoryRule={createCategoryRule}
                 deleteCategoryRule={deleteCategoryRule}
               />
-            </section>
+            </Panel>
           )}
 
           <div className="mt-6 grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-            <section className="min-w-0 rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-5">
+            <Panel>
               <div className="mb-5 flex min-w-0 flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                 <div className="min-w-0">
                   <h2 className="text-lg font-medium">Transaction Feed</h2>
@@ -1527,10 +1526,10 @@ export default function TransactionsPage() {
                   ))}
                 </div>
               )}
-            </section>
+            </Panel>
 
             <aside className="min-w-0 space-y-6">
-              <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+              <Panel>
                 <h2 className="text-lg font-medium">Top Categories</h2>
                 <p className="mt-1 text-sm text-slate-500">
                   Spending this month
@@ -1570,9 +1569,9 @@ export default function TransactionsPage() {
                     })
                   )}
                 </div>
-              </section>
+              </Panel>
 
-              <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+              <Panel>
                 <h2 className="text-lg font-medium">Automation Health</h2>
 
                 <div className="mt-5 space-y-4">
@@ -1601,39 +1600,12 @@ export default function TransactionsPage() {
                     )}
                   />
                 </div>
-              </section>
+              </Panel>
             </aside>
           </div>
         </div>
       </div>
     </main>
-  );
-}
-
-function MetricTile({
-  title,
-  value,
-  tone,
-}: {
-  title: string;
-  value: string;
-  tone: "income" | "expense" | "neutral";
-}) {
-  return (
-    <div className="min-w-0 rounded-2xl border border-slate-800 bg-slate-950 p-4">
-      <p className="text-sm text-slate-500">{title}</p>
-      <p
-        className={
-          tone === "income"
-            ? "mt-2 break-words text-2xl font-semibold text-emerald-300"
-            : tone === "expense"
-            ? "mt-2 break-words text-2xl font-semibold text-red-300"
-            : "mt-2 break-words text-2xl font-semibold text-slate-200"
-        }
-      >
-        {value}
-      </p>
-    </div>
   );
 }
 
@@ -1752,14 +1724,10 @@ function TransactionFeedRow({
             {transaction.name}
           </p>
 
-          <span className="shrink-0 rounded-full bg-slate-800 px-2 py-1 text-[11px] capitalize text-slate-400">
-            {transaction.category || "Other"}
-          </span>
+          <StatusPill>{transaction.category || "Other"}</StatusPill>
 
           {transaction.source === "plaid" && (
-            <span className="shrink-0 rounded-full bg-emerald-500/10 px-2 py-1 text-[11px] text-emerald-300">
-              Plaid
-            </span>
+            <StatusPill tone="good">Plaid</StatusPill>
           )}
         </div>
 
@@ -1955,21 +1923,16 @@ function SmartImporterPanel({
           className="mt-1 w-full min-w-0 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 font-mono text-xs outline-none focus:border-blue-500"
         />
         <div className="mt-2 flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => setCsvText(SAMPLE_CSV)}
-            className="shrink-0 rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800"
-          >
+          <ActionButton onClick={() => setCsvText(SAMPLE_CSV)}>
             Use Sample CSV
-          </button>
-          <button
-            type="button"
+          </ActionButton>
+          <ActionButton
+            variant="primary"
             onClick={parsePastedCsvPreview}
             disabled={parsingFile}
-            className="shrink-0 rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium hover:bg-blue-500 disabled:opacity-60"
           >
             {parsingFile ? "Parsing..." : "Preview CSV"}
-          </button>
+          </ActionButton>
         </div>
       </div>
 
@@ -2015,14 +1978,13 @@ function SmartImporterPanel({
             </select>
           </div>
 
-          <button
-            type="button"
+          <ActionButton
+            variant="success"
             onClick={createCategoryRule}
             disabled={savingRule}
-            className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium hover:bg-emerald-500 disabled:opacity-60"
           >
             {savingRule ? "Saving Rule..." : "Add Rule"}
-          </button>
+          </ActionButton>
         </div>
 
         {categoryRules.length > 0 && (
@@ -2074,20 +2036,18 @@ function SmartImporterPanel({
             </div>
 
             <div className="flex max-w-full gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
-              <button
-                type="button"
+              <ActionButton
                 onClick={selectAllNewRows}
-                className="shrink-0 rounded-xl border border-slate-700 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800"
+                className="px-3 py-2 text-xs"
               >
                 Select New
-              </button>
-              <button
-                type="button"
+              </ActionButton>
+              <ActionButton
                 onClick={clearPreviewSelection}
-                className="shrink-0 rounded-xl border border-slate-700 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800"
+                className="px-3 py-2 text-xs"
               >
                 Clear
-              </button>
+              </ActionButton>
             </div>
           </div>
 
@@ -2176,18 +2136,18 @@ function SmartImporterPanel({
             </p>
           )}
 
-          <button
-            type="button"
+          <ActionButton
+            variant="success"
             onClick={importSelectedPreviewRows}
             disabled={importing || importStats.selected === 0}
-            className="mt-4 w-full rounded-xl bg-emerald-600 px-4 py-3 text-sm font-medium hover:bg-emerald-500 disabled:opacity-60"
+            className="mt-4 w-full py-3"
           >
             {importing
               ? "Importing..."
               : `Import ${importStats.selected} Selected Transaction${
                   importStats.selected === 1 ? "" : "s"
                 }`}
-          </button>
+          </ActionButton>
         </div>
       )}
     </div>
@@ -2432,23 +2392,22 @@ function TransactionCard({
           </div>
 
           <div className="grid grid-cols-2 gap-2 pt-2">
-            <button
-              type="button"
+            <ActionButton
+              variant="primary"
               onClick={() => saveTransactionEdit(transaction.id)}
               disabled={isBusy}
-              className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white hover:bg-blue-500 disabled:opacity-60"
+              className="rounded-lg px-3 py-2 text-xs"
             >
               {updatingId === transaction.id ? "Saving..." : "Save"}
-            </button>
+            </ActionButton>
 
-            <button
-              type="button"
+            <ActionButton
               onClick={cancelEditing}
               disabled={isBusy}
-              className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800 disabled:opacity-60"
+              className="rounded-lg px-3 py-2 text-xs"
             >
               Cancel
-            </button>
+            </ActionButton>
           </div>
         </div>
       ) : (
@@ -2480,16 +2439,10 @@ function TransactionCard({
           </div>
 
           <div className="mt-4 flex min-w-0 flex-wrap gap-2">
-            <span className="rounded-full bg-slate-800 px-2 py-1 text-xs capitalize text-slate-300">
-              {transaction.transaction_type}
-            </span>
-            <span className="rounded-full bg-slate-800 px-2 py-1 text-xs text-slate-300">
-              {transaction.category}
-            </span>
+            <StatusPill>{transaction.transaction_type}</StatusPill>
+            <StatusPill>{transaction.category}</StatusPill>
             {transaction.merchant_name && (
-              <span className="max-w-full break-words rounded-full bg-slate-800 px-2 py-1 text-xs text-slate-400">
-                {transaction.merchant_name}
-              </span>
+              <StatusPill>{transaction.merchant_name}</StatusPill>
             )}
           </div>
 
@@ -2500,23 +2453,22 @@ function TransactionCard({
           )}
 
           <div className="mt-5 grid grid-cols-2 gap-2">
-            <button
-              type="button"
+            <ActionButton
               onClick={() => startEditing(transaction)}
               disabled={isBusy}
-              className="rounded-lg border border-blue-900 px-3 py-2 text-xs text-blue-300 hover:bg-blue-950 disabled:opacity-60"
+              className="rounded-lg px-3 py-2 text-xs text-blue-300"
             >
               Edit
-            </button>
+            </ActionButton>
 
-            <button
-              type="button"
+            <ActionButton
+              variant="danger"
               onClick={() => deleteTransaction(transaction)}
               disabled={isBusy}
-              className="rounded-lg border border-red-900 px-3 py-2 text-xs text-red-300 hover:bg-red-950 disabled:opacity-60"
+              className="rounded-lg px-3 py-2 text-xs"
             >
               {deletingId === transaction.id ? "Deleting..." : "Delete"}
-            </button>
+            </ActionButton>
           </div>
         </>
       )}
