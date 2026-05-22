@@ -1,10 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/components/ToastProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
 import PlaidSyncButton from "@/components/PlaidSyncButton";
+import Panel from "@/components/ui/Panel";
+import ActionButton from "@/components/ui/ActionButton";
+import StatusPill from "@/components/ui/StatusPill";
 
 type PlaidConnection = {
   id: string;
@@ -29,6 +32,31 @@ export default function PlaidConnectionsPanel({
   const [connections, setConnections] = useState<PlaidConnection[]>([]);
   const [loading, setLoading] = useState(true);
   const [disconnectingId, setDisconnectingId] = useState("");
+
+  const summary = useMemo(() => {
+    const accountCount = connections.reduce(
+      (sum, connection) => sum + Number(connection.account_count || 0),
+      0
+    );
+
+    const syncedCount = connections.filter(
+      (connection) => !!connection.last_synced_at
+    ).length;
+
+    const mostRecentSync = connections
+      .map((connection) => connection.last_synced_at)
+      .filter(Boolean)
+      .sort((a, b) => {
+        return new Date(b || "").getTime() - new Date(a || "").getTime();
+      })[0];
+
+    return {
+      institutions: connections.length,
+      accountCount,
+      syncedCount,
+      mostRecentSync: mostRecentSync || null,
+    };
+  }, [connections]);
 
   async function getAuthToken() {
     const {
@@ -55,7 +83,7 @@ export default function PlaidConnectionsPanel({
       },
     });
 
-    const data = await response.json();
+    const data = await response.json().catch(() => ({}));
 
     setLoading(false);
 
@@ -98,7 +126,7 @@ export default function PlaidConnectionsPanel({
       }),
     });
 
-    const data = await response.json();
+    const data = await response.json().catch(() => ({}));
 
     setDisconnectingId("");
 
@@ -127,79 +155,225 @@ export default function PlaidConnectionsPanel({
   }, []);
 
   return (
-    <section className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-      <div className="flex items-start justify-between gap-3">
+    <Panel className="mb-6">
+      <div className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
-          <h3 className="text-sm font-semibold text-slate-100">
-            Connected Banks
-          </h3>
-          <p className="mt-1 text-xs text-slate-500">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <h3 className="text-lg font-semibold text-slate-100">
+              Connected Banks
+            </h3>
+
+            {!loading && connections.length > 0 && (
+              <StatusPill tone="good">
+                {connections.length} connected
+              </StatusPill>
+            )}
+          </div>
+
+          <p className="mt-1 text-sm text-slate-500">
             Sync balances and transactions from linked institutions.
           </p>
         </div>
 
-        {connections.length > 0 && (
-          <PlaidSyncButton
-            label="Sync"
-            onComplete={() => {
-              loadConnections();
-              onChanged?.();
-            }}
-          />
-        )}
+        <div className="flex max-w-full gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
+          <ActionButton onClick={loadConnections} disabled={loading}>
+            {loading ? "Refreshing..." : "Reload"}
+          </ActionButton>
+
+          {connections.length > 0 && (
+            <PlaidSyncButton
+              label="Sync"
+              onComplete={() => {
+                loadConnections();
+                onChanged?.();
+              }}
+            />
+          )}
+        </div>
+      </div>
+
+      <div className="mt-5 grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <ConnectionMetric
+          label="Institutions"
+          value={String(summary.institutions)}
+        />
+        <ConnectionMetric
+          label="Linked Accounts"
+          value={String(summary.accountCount)}
+        />
+        <ConnectionMetric
+          label="Synced Banks"
+          value={`${summary.syncedCount}/${summary.institutions}`}
+        />
+        <ConnectionMetric
+          label="Last Sync"
+          value={
+            summary.mostRecentSync
+              ? formatRelativeTime(summary.mostRecentSync)
+              : "Not synced"
+          }
+        />
       </div>
 
       {loading ? (
-        <div className="mt-4 rounded-xl border border-slate-800 bg-slate-900 p-4 text-sm text-slate-500">
-          Loading connected banks...
+        <div className="mt-5 grid gap-3">
+          <LoadingConnectionCard />
+          <LoadingConnectionCard />
         </div>
       ) : connections.length === 0 ? (
-        <div className="mt-4 rounded-xl border border-dashed border-slate-800 bg-slate-900/60 p-4 text-sm text-slate-500">
-          No banks connected yet.
+        <div className="mt-5 rounded-2xl border border-dashed border-slate-800 bg-slate-950 p-6 text-center">
+          <p className="text-sm font-medium text-slate-200">
+            No banks connected yet
+          </p>
+          <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-slate-500">
+            Connect a bank to automatically sync accounts, balances, and
+            transactions into WealthOS.
+          </p>
         </div>
       ) : (
-        <div className="mt-4 divide-y divide-slate-800 overflow-hidden rounded-xl border border-slate-800 bg-slate-900">
+        <div className="mt-5 grid min-w-0 gap-3">
           {connections.map((connection) => (
-            <div
+            <ConnectionCard
               key={connection.id}
-              className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"
-            >
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="truncate text-sm font-medium text-slate-100">
-                    {connection.institution_name}
-                  </p>
-
-                  <span className="rounded-full bg-emerald-500/10 px-2 py-1 text-[11px] font-medium text-emerald-300">
-                    Connected
-                  </span>
-                </div>
-
-                <p className="mt-1 text-xs text-slate-500">
-                  {connection.account_count} linked account
-                  {connection.account_count === 1 ? "" : "s"} ·{" "}
-                  {connection.last_synced_at
-                    ? `Synced ${formatRelativeTime(connection.last_synced_at)}`
-                    : "Not synced yet"}
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => disconnectConnection(connection)}
-                disabled={disconnectingId === connection.id}
-                className="shrink-0 rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-400 hover:border-red-900 hover:bg-red-950 hover:text-red-300 disabled:opacity-60"
-              >
-                {disconnectingId === connection.id
-                  ? "Disconnecting..."
-                  : "Disconnect"}
-              </button>
-            </div>
+              connection={connection}
+              disconnectingId={disconnectingId}
+              disconnectConnection={disconnectConnection}
+            />
           ))}
         </div>
       )}
-    </section>
+    </Panel>
   );
+}
+
+function ConnectionCard({
+  connection,
+  disconnectingId,
+  disconnectConnection,
+}: {
+  connection: PlaidConnection;
+  disconnectingId: string;
+  disconnectConnection: (connection: PlaidConnection) => void;
+}) {
+  const isDisconnecting = disconnectingId === connection.id;
+  const products = Array.isArray(connection.products)
+    ? connection.products.filter(Boolean)
+    : [];
+
+  return (
+    <div className="min-w-0 rounded-2xl border border-slate-800 bg-slate-950 p-4">
+      <div className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="min-w-0">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-slate-800 bg-slate-900 text-sm font-semibold text-slate-200">
+              {getInstitutionInitials(connection.institution_name)}
+            </div>
+
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-slate-100">
+                {connection.institution_name}
+              </p>
+
+              <p className="mt-1 text-xs text-slate-500">
+                {connection.account_count} linked account
+                {connection.account_count === 1 ? "" : "s"}
+              </p>
+            </div>
+
+            <StatusPill tone="good">Connected</StatusPill>
+          </div>
+
+          <div className="mt-3 flex min-w-0 flex-wrap gap-2">
+            {products.length > 0 ? (
+              products.slice(0, 4).map((product) => (
+                <StatusPill key={product} tone="neutral">
+                  {formatProductLabel(product)}
+                </StatusPill>
+              ))
+            ) : (
+              <StatusPill tone="neutral">Transactions</StatusPill>
+            )}
+
+            {products.length > 4 && (
+              <StatusPill tone="neutral">+{products.length - 4}</StatusPill>
+            )}
+          </div>
+        </div>
+
+        <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center lg:shrink-0">
+          <div className="min-w-0 rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 sm:min-w-[160px]">
+            <p className="text-xs text-slate-500">Last synced</p>
+            <p className="mt-1 truncate text-sm font-medium text-slate-200">
+              {connection.last_synced_at
+                ? formatRelativeTime(connection.last_synced_at)
+                : "Not synced yet"}
+            </p>
+          </div>
+
+          <ActionButton
+            variant="danger"
+            onClick={() => disconnectConnection(connection)}
+            disabled={isDisconnecting}
+            className="w-full sm:w-auto"
+          >
+            {isDisconnecting ? "Disconnecting..." : "Disconnect"}
+          </ActionButton>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ConnectionMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0 rounded-2xl border border-slate-800 bg-slate-950 p-4">
+      <p className="text-xs text-slate-500">{label}</p>
+      <p className="mt-1 truncate text-lg font-semibold text-slate-100">
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function LoadingConnectionCard() {
+  return (
+    <div className="animate-pulse rounded-2xl border border-slate-800 bg-slate-950 p-4">
+      <div className="flex items-center gap-3">
+        <div className="h-10 w-10 rounded-2xl bg-slate-800" />
+        <div className="min-w-0 flex-1">
+          <div className="h-4 w-40 rounded bg-slate-800" />
+          <div className="mt-2 h-3 w-28 rounded bg-slate-800" />
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-2 sm:grid-cols-3">
+        <div className="h-8 rounded-xl bg-slate-800" />
+        <div className="h-8 rounded-xl bg-slate-800" />
+        <div className="h-8 rounded-xl bg-slate-800" />
+      </div>
+    </div>
+  );
+}
+
+function getInstitutionInitials(value: string) {
+  const words = String(value || "Bank")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  if (words.length === 0) return "B";
+
+  if (words.length === 1) {
+    return words[0].slice(0, 2).toUpperCase();
+  }
+
+  return `${words[0][0]}${words[1][0]}`.toUpperCase();
+}
+
+function formatProductLabel(value: string) {
+  return String(value || "")
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 function formatRelativeTime(value: string) {
