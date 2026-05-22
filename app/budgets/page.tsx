@@ -5,7 +5,11 @@ import { supabase } from "@/lib/supabase";
 import AppNav from "@/components/AppNav";
 import { useToast } from "@/components/ToastProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
-
+import PageHeader from "@/components/ui/PageHeader";
+import Panel from "@/components/ui/Panel";
+import MetricCard from "@/components/ui/MetricCard";
+import ActionButton from "@/components/ui/ActionButton";
+import StatusPill from "@/components/ui/StatusPill";
 type TransactionType = "income" | "expense" | "transfer";
 
 type Transaction = {
@@ -575,44 +579,37 @@ export default function BudgetPage() {
 
       <div className="min-w-0 flex-1">
         <div className="mx-auto w-full max-w-7xl overflow-x-hidden px-4 py-6 pb-28 sm:px-6 lg:px-8 md:pb-8">
-          <div className="mb-6 flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="min-w-0">
-              <p className="text-sm text-slate-400">WealthOS</p>
-              <h1 className="mt-1 text-3xl font-semibold">Budgets</h1>
-              <p className="mt-1 text-sm text-slate-500">
-                Plan monthly spending, compare actuals, and catch budget risk
-                early.
-              </p>
-            </div>
+          <PageHeader
+  title="Budgets"
+  description="Plan monthly spending, compare actuals, and catch budget risk early."
+  actions={
+    <>
+      <input
+        value={selectedMonth}
+        onChange={(event) => setSelectedMonth(event.target.value)}
+        type="month"
+        className="min-w-0 rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200 outline-none focus:border-blue-500"
+      />
 
-            <div className="flex max-w-full flex-wrap gap-2">
-              <input
-                value={selectedMonth}
-                onChange={(event) => setSelectedMonth(event.target.value)}
-                type="month"
-                className="min-w-0 rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200 outline-none focus:border-blue-500"
-              />
+      <ActionButton
+        onClick={autoFillBudgetFromActuals}
+        disabled={autofilling}
+      >
+        {autofilling ? "Autofilling..." : "Autofill"}
+      </ActionButton>
 
-              <button
-                type="button"
-                onClick={autoFillBudgetFromActuals}
-                disabled={autofilling}
-                className="shrink-0 rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-900 disabled:opacity-60"
-              >
-                {autofilling ? "Autofilling..." : "Autofill"}
-              </button>
+      <ActionButton
+        variant="primary"
+        onClick={() => setShowAddCategory((current) => !current)}
+        className="bg-orange-600 hover:bg-orange-500"
+      >
+        + Add Category
+      </ActionButton>
+    </>
+  }
+/>
 
-              <button
-                type="button"
-                onClick={() => setShowAddCategory((current) => !current)}
-                className="shrink-0 rounded-xl bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-500"
-              >
-                + Add Category
-              </button>
-            </div>
-          </div>
-
-          <section className="min-w-0 overflow-hidden rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-sm">
+          <Panel variant="hero">
             <div className="grid min-w-0 gap-6 lg:grid-cols-[1.2fr_0.8fr]">
               <div className="min-w-0">
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
@@ -671,27 +668,27 @@ export default function BudgetPage() {
               </div>
 
               <div className="grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-1">
-                <BudgetMetricTile
-                  title="Planned"
-                  value={formatCurrency(summary.totalPlanned)}
-                  tone="neutral"
-                />
-                <BudgetMetricTile
-                  title="Actual"
-                  value={formatCurrency(summary.totalActual)}
-                  tone="expense"
-                />
-                <BudgetMetricTile
-                  title="Over Budget"
-                  value={String(summary.overBudgetCount)}
-                  tone={summary.overBudgetCount > 0 ? "danger" : "good"}
-                />
+                <MetricCard
+  title="Planned"
+  value={formatCurrency(summary.totalPlanned)}
+  tone="muted"
+/>
+<MetricCard
+  title="Actual"
+  value={formatCurrency(summary.totalActual)}
+  tone="bad"
+/>
+<MetricCard
+  title="Over Budget"
+  value={String(summary.overBudgetCount)}
+  tone={summary.overBudgetCount > 0 ? "warning" : "good"}
+/>
               </div>
             </div>
-          </section>
+          </Panel>
 
           {showAddCategory && (
-            <section className="mt-6 min-w-0 rounded-2xl border border-slate-800 bg-slate-900 p-5">
+            <Panel className="mt-6">
               <div className="mb-5 flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <h2 className="text-lg font-medium">Add Budget Category</h2>
@@ -700,13 +697,12 @@ export default function BudgetPage() {
                   </p>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => setShowAddCategory(false)}
-                  className="shrink-0 rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-400 hover:bg-slate-800"
-                >
-                  Close
-                </button>
+                <ActionButton
+  onClick={() => setShowAddCategory(false)}
+  className="rounded-lg px-3 py-2 text-xs"
+>
+  Close
+</ActionButton>
               </div>
 
               <form
@@ -743,20 +739,21 @@ export default function BudgetPage() {
                 </div>
 
                 <div className="flex items-end">
-                  <button
-                    type="submit"
-                    disabled={addingCategory}
-                    className="w-full shrink-0 rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium hover:bg-blue-500 disabled:opacity-60"
-                  >
-                    {addingCategory ? "Adding..." : "Save"}
-                  </button>
+                  <ActionButton
+  type="submit"
+  variant="primary"
+  disabled={addingCategory}
+  className="w-full"
+>
+  {addingCategory ? "Adding..." : "Save"}
+</ActionButton>
                 </div>
               </form>
-            </section>
+            </Panel>
           )}
 
           <div className="mt-6 grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-            <section className="min-w-0 rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-5">
+            <Panel>
               <div className="mb-5 flex min-w-0 flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                 <div className="min-w-0">
                   <h2 className="text-lg font-medium">Category Budgets</h2>
@@ -804,10 +801,10 @@ export default function BudgetPage() {
                   ))}
                 </div>
               )}
-            </section>
+            </Panel>
 
             <aside className="min-w-0 space-y-6">
-              <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+              <Panel>
                 <h2 className="text-lg font-medium">Budget Health</h2>
 
                 <div className="mt-5 space-y-4">
@@ -834,15 +831,15 @@ export default function BudgetPage() {
                   />
                 </div>
 
-                <button
-                  type="button"
-                  onClick={resetBudget}
-                  disabled={resetting}
-                  className="mt-5 w-full rounded-xl border border-red-900 px-4 py-2 text-sm text-red-300 hover:bg-red-950 disabled:opacity-60"
-                >
-                  {resetting ? "Resetting..." : "Reset Budget"}
-                </button>
-              </section>
+                <ActionButton
+  variant="danger"
+  onClick={resetBudget}
+  disabled={resetting}
+  className="mt-5 w-full"
+>
+  {resetting ? "Resetting..." : "Reset Budget"}
+</ActionButton>
+              </Panel>
 
               <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
                 <h2 className="text-lg font-medium">Priority Review</h2>
@@ -1009,34 +1006,34 @@ function BudgetFeedRow({
   );
 }
 
-function BudgetMetricTile({
-  title,
-  value,
-  tone,
-}: {
-  title: string;
-  value: string;
-  tone: "good" | "expense" | "danger" | "neutral";
-}) {
-  return (
-    <div className="min-w-0 rounded-2xl border border-slate-800 bg-slate-950 p-4">
-      <p className="text-sm text-slate-500">{title}</p>
-      <p
-        className={
-          tone === "good"
-            ? "mt-2 break-words text-2xl font-semibold text-emerald-300"
-            : tone === "expense"
-            ? "mt-2 break-words text-2xl font-semibold text-red-300"
-            : tone === "danger"
-            ? "mt-2 break-words text-2xl font-semibold text-amber-300"
-            : "mt-2 break-words text-2xl font-semibold text-slate-200"
-        }
-      >
-        {value}
-      </p>
-    </div>
-  );
-}
+// function BudgetMetricTile({
+//   title,
+//   value,
+//   tone,
+// }: {
+//   title: string;
+//   value: string;
+//   tone: "good" | "expense" | "danger" | "neutral";
+// }) {
+//   return (
+//     <div className="min-w-0 rounded-2xl border border-slate-800 bg-slate-950 p-4">
+//       <p className="text-sm text-slate-500">{title}</p>
+//       <p
+//         className={
+//           tone === "good"
+//             ? "mt-2 break-words text-2xl font-semibold text-emerald-300"
+//             : tone === "expense"
+//             ? "mt-2 break-words text-2xl font-semibold text-red-300"
+//             : tone === "danger"
+//             ? "mt-2 break-words text-2xl font-semibold text-amber-300"
+//             : "mt-2 break-words text-2xl font-semibold text-slate-200"
+//         }
+//       >
+//         {value}
+//       </p>
+//     </div>
+//   );
+// }
 
 function BudgetMiniStat({
   label,
@@ -1107,12 +1104,12 @@ function getProgressClass(status: BudgetRowStatus) {
 }
 
 function StatusBadge({ status }: { status: BudgetRowStatus }) {
-  const styles =
+  const tone =
     status === "over" || status === "unplanned"
-      ? "bg-red-500/10 text-red-300"
+      ? "bad"
       : status === "warning"
-      ? "bg-amber-500/10 text-amber-300"
-      : "bg-emerald-500/10 text-emerald-300";
+      ? "warning"
+      : "good";
 
   const label =
     status === "over"
@@ -1123,11 +1120,7 @@ function StatusBadge({ status }: { status: BudgetRowStatus }) {
       ? "Watch"
       : "Good";
 
-  return (
-    <span className={`shrink-0 rounded-full px-2 py-1 text-xs ${styles}`}>
-      {label}
-    </span>
-  );
+  return <StatusPill tone={tone}>{label}</StatusPill>;
 }
 
 function InsightCard({ title, text }: { title: string; text: string }) {
